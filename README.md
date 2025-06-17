@@ -5,7 +5,7 @@
 Cypher is a Word Factory Game that challenges players to decode and create words in a sleek, interactive environment.
 
 ## Technology Stack
-- **Programming Language:** Java
+- **Programming Language:** Java 8
 - **Architecture:** Common Object Broker Architecture (CORBA)
 - **Database:** MySQL
 - **GUI Framework:** Java Swing
