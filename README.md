@@ -20,17 +20,18 @@ Cypher is a Word Factory Game that challenges players to decode and create words
 - `server/`: Contains the server-side code for game management and administration.
 
 ## Getting Started
-In the command line interface (CLI) issue the commands below:
-1. `idlj -fall boggled.idl`
+### To get started with the project:
+1. Clone this repository to your local machine.
+2. Set up your Java development environment (JDK 8 or higher) and ensure Maven is installed.
+3. Configure and set up the MySQL database according to the provided database schema (`cypher.sql`).
+4. Follow the instructions in the `client/` and `server/` directories to set up and run each component.
+
+#### In the command line interface (CLI) issue the commands below:
+1. `idlj -fall cypher.idl`
 2. `tnameserv -ORBInitialPort [port number]`
 3. `start orbd –ORBInitialPort 10050 –ORBInitialHost [localhost]`
 4. `start java Server –ORBInitialPort 10050 –ORBInitialHost [localhost]`
 5. `start java Client –ORBInitialPort 10050 –ORBInitialHost [localhost]`
-### To get started with the project:
-1. Clone this repository to your local machine.
-2. Set up your Java development environment (JDK 8 or higher) and ensure Maven is installed.
-3. Configure and set up the MySQL database according to the provided database schema (`boggled.sql`).
-4. Follow the instructions in the `client/` and `server/` directories to set up and run each component.
 
 ## Contributions
 Contributions are welcome! Please fork the repository and submit a pull request.
