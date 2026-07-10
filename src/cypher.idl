@@ -1,0 +1,253 @@
+module cypher {
+
+    /** ─── Player (Client-side) ──────────────────────────────────────────────
+    *   The client implements this interface and passes it to the server on login.
+    *   The server calls these methods to push notifications to the client.
+    */
+    module player {
+        module app {
+            typedef sequence<string> strings;
+            typedef sequence<long> integers;
+
+            interface PlayerApp {
+                //── Round Events ─────────────────────────────────────────────
+
+                /**
+                *   Called by server at the start of each round.
+                *   'letters' is a 20-character string (13 consonants, 7 vowels)
+                */
+                void sendLetters(in string letters);
+
+                /**
+                 * Notifies the client that a submitted word is invalid.
+                 * @param word   The rejected word.
+                 * @param reason Human-readable reason (e.g., too short, not in words.txt).
+                 */
+                void invalidWord(in string word, in string reason);
+
+                /**
+                 * Confirms that the submitted word passed server validation.
+                 * @param word The accepted word.
+                 */
+                void wordAccepted(in string word);
+
+                /**
+                 * Sends end-of-round standings.
+                 * @param usernames    Players in the round.
+                 * @param roundScores  Score per player for the round (index-aligned).
+                 * @param longestWord  Longest valid word per player (index-aligned).
+                 * @param roundWinner  Username of round winner; may be empty on tie.
+                 * @param roundNumber  1-based round index.
+                 */
+                void sendRoundResult(
+                    in strings usernames,
+                    in integers roundScores,
+                    in strings longestWord,
+                    in string roundWinner,
+                    in long roundNumber
+                );
+
+                /**
+                 * Sends end-of-game summary.
+                 * @param usernames   Players in the game.
+                 * @param roundWins   Number of rounds won per player (index-aligned).
+                 * @param totalScores Aggregate score per player (index-aligned).
+                 * @param gameWinner  Username of eventual winner.
+                 */
+                void sendGameResult(
+                    in strings usernames,
+                    in integers roundWins,
+                    in integers totalScores,
+                    in string gameWinner
+                );
+
+                //── Matchmaking Events ─────────────────────────────────────────────
+
+                /**
+                 * Informs player that matchmaking has started and they are waiting.
+                 * @param timeout Waiting window in seconds.
+                 */
+                void waitingForPlayers(in long timeout);
+
+                /**
+                 * Informs player that a game has been formed.
+                 * @param gameId    Unique game identifier.
+                 * @param opponents Usernames of other players in the game.
+                 */
+                void gameFound(in long gameId, in strings opponents);
+
+                /**
+                 * Informs player that no additional players joined in time.
+                 */
+                void noPlayersJoined();
+
+                //── Admin/System Events ────────────────────────────────────────────
+
+                 /**
+                 * Notifies player that the account has been banned.
+                 * Client should force logout and disable gameplay actions.
+                 */
+                void notifyBanned();
+
+                 /**
+                 * Notifies players that current game was forcibly stopped (e.g., admin action).
+                 */
+                void notifyGameStopped();
+            };
+        };
+    };
+
+    // ─── Server ───────────────────────────────────────────────────────────────────
+    module server {
+        // -------------------------------------------------------------------------
+        // Runtime-configurable game settings (admin-managed).
+        // -------------------------------------------------------------------------
+        module config {
+            struct GameConfig {
+                long waitingTimeSecs;   // How long to wait for players to join a game (default: 10)
+                long roundDurationSecs; // How long each round lasts in seconds (default: 30)
+                long maxPlayers;        // Maximum players allowed per game
+                long roundsToWin;       // How many round wins needed to win the game (default: 3)
+            };
+        };
+
+        // -------------------------------------------------------------------------
+        // Domain-specific exceptions for deterministic client error handling.
+        // -------------------------------------------------------------------------
+        module controller {
+            module exceptions {
+                exception InvalidCredentialsException { string message; };  // Raised when username/password do not match any record in the DB
+                exception AlreadyLoggedInException { string message; };     // Raised when the player is already logged in (single session enforced)
+                exception PlayerBannedException { string message; };        // Raised when the player's account has been banned by admin
+
+                exception NoPlayersAvailableException { string message; };  // Raised when findOrCreateGame() times out with no other player joining
+                exception PlayerAlreadyInQueueException { string message; };// Raised when the player calls findOrCreateGame() but is already in the queue
+                exception PlayerNotInQueueException { string message; };    // Raised when the player calls cancelQueue() but was never in the queue
+
+                exception GameAlreadyStartedException { string message; };  // Raised when attempting to start a game that has already started
+                exception GameNotFoundException { string message; };        // Raised when referencing a gameId that does not exist in the DB
+                exception NotInGameException { string message; };           // Raised when a player attempts a game action but is not part of that game
+
+                exception WordTooShortException { string message; };        // Raised when submitted word is less than 4 letters
+                exception InvalidWordException { string message; };         // Raised when submitted word is not found in words.txt
+                exception InvalidLettersException { string message; };      // Raised when submitted word uses letters not present in the round's letter set
+                exception RoundNotActiveException { string message; };      // Raised when submitted word arrives after the 30-second round timer has elapsed
+            };
+        };
+
+        // ── Database Table Structures ─────────────────────────────────────────
+        module tables {
+            module player {
+                struct Player {
+                    long playerId;
+                    string username;
+                    string password;
+                    string status;      // "online" | "offline" | "in-game"
+                    boolean isBanned;   // true if admin has banned this account
+                    long totalWins;
+                };
+            };
+
+            module game {
+                struct Game {
+                    long gameId;
+                    string startTime;
+                    string endTime;
+                    string gameStatus;  // "waiting" | "in-progress" | "finished" | "stopped"
+                    string playerWinner; // Username of the game winner, empty if game not yet finished
+                };
+            };
+
+            module round {
+                struct Round {
+                    long roundId;
+                    long gameId;
+                    long roundNumber;
+                    string letters;     // The 20 letters sent to players this round
+                    string roundWinner; // Username of round winner, empty if tie
+                };
+
+                struct PlayerRoundScore {
+                    long playerId;
+                    long gameId;
+                    long roundId;
+                    long score;             // Sum of lengths of this player's unique valid words
+                    string wordSubmitted;   // The longest unique word submitted (for leaderboard tracking)
+                };
+            };
+
+            module leaderboard {
+                struct LeaderboardEntry {
+                    long rank;          // Position on leaderboard e.g. 1, 2, 3, 4, 5
+                    string username;    // Player username
+                    long totalWins;     // Total game wins
+                    string longestWord; // Longest word ever submitted by this player
+                };
+                // Sequence of LeaderboardEntry used as return type for getLeaderboard()
+                typedef sequence<LeaderboardEntry> Leaderboard;
+            };
+        };
+
+        // -------------------------------------------------------------------------
+        // Main server application contract.
+        // -------------------------------------------------------------------------
+        module app {
+            interface ServerApp {
+                /**
+                 * Authenticates a player and registers callback for server push events.
+                 * @return playerId on successful login.
+                 */
+                long login(in string username, in string password, in player::app::PlayerApp callback)
+                    raises (controller::exceptions::InvalidCredentialsException,
+                            controller::exceptions::AlreadyLoggedInException,
+                            controller::exceptions::PlayerBannedException);
+
+                /**
+                 * Logs out player and releases online session state.
+                 */
+                void logout(in long playerId);
+
+                /**
+                 * Places player in matchmaking queue or forms a game when criteria is met.
+                 * @return gameId when game is available.
+                 */
+                long findOrCreateGame(in long playerId)
+                    raises (controller::exceptions::NoPlayersAvailableException,
+                            controller::exceptions::GameAlreadyStartedException,
+                            controller::exceptions::PlayerAlreadyInQueueException);
+
+                // Removes the player from the matchmaking queue before a game is found.
+                void cancelQueue(in long playerId)
+                    raises (controller::exceptions::PlayerNotInQueueException);
+
+                /**
+                 * Submits a word for validation in an active round.
+                 */
+                void submitWord(in long playerId, in long gameId, in string word)
+                    raises (controller::exceptions::WordTooShortException,
+                            controller::exceptions::InvalidWordException,
+                            controller::exceptions::InvalidLettersException,
+                            controller::exceptions::RoundNotActiveException,
+                            controller::exceptions::NotInGameException);
+
+                /**
+                 * Removes player from active game context. The remaining players continue playing.
+                 */
+                void leaveGame(in long playerId, in long gameId)
+                    raises (controller::exceptions::NotInGameException);
+
+                // ── Leaderboard ───────────────────────────────────────────────
+                // Returns the top 5 players by total game wins.
+                tables::leaderboard::Leaderboard getLeaderboard();
+
+                // ----------------------------
+                // Config management endpoints
+                // ----------------------------
+                config::GameConfig getGameConfig();
+                void setWaitingTime(in long seconds);   // Updates the waiting time for matchmaking (in seconds).
+                void setRoundDuration(in long seconds); // Updates the round duration (in seconds).
+                void setMaxPlayers(in long maxPlayers); // Updates the maximum number of players allowed per game.
+            };
+        };
+    };
+};
