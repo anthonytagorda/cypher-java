@@ -145,6 +145,7 @@ module cypher {
                     string status;      // "online" | "offline" | "in-game"
                     boolean isBanned;   // true if admin has banned this account
                     long totalWins;
+                    string createdAt;   // e.g. "2026-07-14 10:30:00"
                 };
             };
 
@@ -203,9 +204,27 @@ module cypher {
                             controller::exceptions::PlayerBannedException);
 
                 /**
+                 * Registers a new player account.
+                 * @param username Desired unique username.
+                 * @param password Plain-text or pre-hashed password (based on server policy).
+                 * @return true if registration succeeds; false if username already exists or creation fails.
+                 */
+                boolean register(in string username, in string password);
+
+                /**
                  * Logs out player and releases online session state.
                  */
                 void logout(in long playerId);
+
+                /**
+                 * Starts a game explicitly (manual start), if it is still in waiting state.
+                 * @param gameId The target game ID.
+                 * @raises GameNotFoundException if the game does not exist.
+                 * @raises GameAlreadyStartedException if the game is already in progress or finished.
+                 */
+                void startGame(in long gameId)
+                    raises (controller::exceptions::GameNotFoundException,
+                            controller::exceptions::GameAlreadyStartedException);
 
                 /**
                  * Places player in matchmaking queue or forms a game when criteria is met.
