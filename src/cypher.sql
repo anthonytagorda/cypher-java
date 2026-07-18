@@ -1,5 +1,11 @@
+DROP DATABASE IF EXISTS cypher;
 CREATE DATABASE IF NOT EXISTS cypher;
 USE cypher;
+
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE players;
+ALTER TABLE players AUTO_INCREMENT = 1;
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- =========================
 -- PLAYERS / AUTH
@@ -9,8 +15,8 @@ CREATE TABLE IF NOT EXISTS players (
     username     VARCHAR(50) NOT NULL UNIQUE,
     password     VARCHAR(100) NOT NULL,
     status       ENUM('online','offline','in-game') NOT NULL DEFAULT 'offline',
-    isBanned     TINYINT(1) NOT NULL DEFAULT 0,
-    totalWins    INT NOT NULL DEFAULT 0,
+    is_banned     TINYINT(1) NOT NULL DEFAULT 0,
+    total_wins    INT NOT NULL DEFAULT 0,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
