@@ -1,6 +1,7 @@
 package cypher.player.views;
 
 import cypher.player.Player;
+import cypher.player.views.components.fonts.FontLoader;
 
 import javax.swing.*;
 import java.awt.*;
@@ -21,7 +22,7 @@ public class PlayerRegisterView extends JFrame {
     private void initComponents() {
         JLabel usernameLabel = new JLabel("Username");
         JLabel passwordLabel = new JLabel("Password");
-        JLabel confirmPasswordLabel = new JLabel("Confirm Password");
+        JLabel confirmPasswordLabel = new JLabel("Confirm Pass");
         JLabel loginLabel = new JLabel("<html>Already have an account? <u>Log In!</u></html>");
 
         usernameField = new JTextField();
@@ -34,6 +35,7 @@ public class PlayerRegisterView extends JFrame {
         ImageIcon headerRaw = new ImageIcon("src/cypher/assets/cypher_register-header.png");
         Image headerScaled = headerRaw.getImage().getScaledInstance(370, 110, Image.SCALE_SMOOTH);
         JLabel imageLabel = new JLabel(new ImageIcon(headerScaled));
+        imageLabel.setBounds(-250, -40, 900, 300);
 
         ImageIcon successRaw = new ImageIcon("src/cypher/assets/success.png");
         Image successScaled = successRaw.getImage().getScaledInstance(35, 35, Image.SCALE_SMOOTH);
@@ -52,9 +54,14 @@ public class PlayerRegisterView extends JFrame {
         setContentPane(contentPane);
 
         // Layout
-        usernameLabel.setBounds(70, 180, 120, 25);
-        passwordLabel.setBounds(70, 220, 120, 25);
-        confirmPasswordLabel.setBounds(70, 260, 150, 25);
+        usernameLabel.setBounds(60, 180, 120, 25);
+        passwordLabel.setBounds(60, 220, 120, 25);
+        confirmPasswordLabel.setBounds(60, 260, 150, 25);
+
+        usernameLabel.setFont(FontLoader.loadFont(9f));
+        passwordLabel.setFont(FontLoader.loadFont(9f));
+        confirmPasswordLabel.setFont(FontLoader.loadFont(9f));
+        usernameField.setFont(FontLoader.loadFont(10f));
 
         usernameLabel.setForeground(Color.WHITE);
         passwordLabel.setForeground(Color.WHITE);
@@ -64,13 +71,13 @@ public class PlayerRegisterView extends JFrame {
         passwordField.setBounds(190, 220, 150, 25);
         confirmPasswordField.setBounds(190, 260, 150, 25);
 
-        registerButton.setBounds(140, 300, 120, 30);
+        registerButton.setBounds(135, 310, 150, 40);
+        registerButton.setFont(FontLoader.loadFont(12f));
 
-        loginLabel.setBounds(105, 335, 220, 30);
+        loginLabel.setBounds(60, 360, 300, 30);
         loginLabel.setForeground(Color.decode("#00ffff"));
+        loginLabel.setFont(FontLoader.loadFont(9f));
         loginLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-
-        imageLabel.setBounds(-250, -40, 900, 300);
 
         contentPane.add(usernameLabel);
         contentPane.add(passwordLabel);

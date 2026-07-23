@@ -1,6 +1,7 @@
 package cypher.player.views;
 
 import cypher.player.Player;
+import cypher.player.views.components.fonts.FontLoader;
 
 import javax.swing.*;
 import javax.swing.plaf.basic.BasicProgressBarUI;
@@ -43,10 +44,22 @@ public class PlayerLoaderView extends JFrame {
         loadingBar = new JProgressBar(0, 100);
         loadingBar.setPreferredSize(new Dimension(840, 50));
         loadingBar.setStringPainted(true);
-        loadingBar.setForeground(Color.GREEN);
+        loadingBar.setFont(FontLoader.loadFont(8f));
+        loadingBar.setForeground(Color.decode("#644BA0"));
         loadingBar.setUI(new BasicProgressBarUI() {
             @Override
             protected Color getSelectionForeground() {
+                return Color.BLACK;
+            }
+        });
+        loadingBar.setUI(new BasicProgressBarUI() {
+            @Override
+            protected Color getSelectionForeground() {
+                return Color.WHITE;
+            }
+
+            @Override
+            protected Color getSelectionBackground() {
                 return Color.BLACK;
             }
         });

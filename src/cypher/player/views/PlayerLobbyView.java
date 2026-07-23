@@ -9,6 +9,7 @@ import java.awt.event.WindowEvent;
 
 public class PlayerLobbyView extends JFrame {
     private JLabel countdownLabel;
+    private static final int LOBBY_COUNTDOWN_SECS = 100;
 
     private int waitingTime;
     private Timer timer;
@@ -17,6 +18,32 @@ public class PlayerLobbyView extends JFrame {
     public PlayerLobbyView() {
         initComponents();
         setVisible(true);
+
+        waitingTime = LOBBY_COUNTDOWN_SECS;
+        startTimer();
+    }
+
+    private void startTimer() {
+        countdownLabel.setText(String.valueOf(waitingTime));
+
+        timer = new Timer(1000, e -> {
+            waitingTime--;
+            countdownLabel.setText(String.valueOf(Math.max(waitingTime, 0)));
+
+            if (waitingTime <= 0) {
+                stopTimer();
+                dispose();
+                new PlayerInGameView();
+            }
+        });
+
+        timer.start();
+    }
+
+    private void stopTimer() {
+        if (timer != null && timer.isRunning()) {
+            timer.stop();
+        }
     }
 
     private void initComponents() {
@@ -41,18 +68,18 @@ public class PlayerLobbyView extends JFrame {
 
         String username = Player.getPlayerUsername() == null ? "Player" : Player.getPlayerUsername();
         JLabel usernameLabel = new JLabel(username.toUpperCase());
-        usernameLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        usernameLabel.setFont(new Font("Roboto", Font.BOLD, 18));
         usernameLabel.setForeground(Color.WHITE);
 
         JLabel titleLabel = new JLabel("Waiting for Other Players");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 28));
+        titleLabel.setFont(new Font("Roboto", Font.BOLD, 28));
         titleLabel.setForeground(Color.WHITE);
 
         JLabel timerLabel = new JLabel("Time Remaining:");
         timerLabel.setForeground(Color.WHITE);
 
         countdownLabel = new JLabel("--");
-        countdownLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        countdownLabel.setFont(new Font("Roboto", Font.BOLD, 18));
         countdownLabel.setForeground(Color.WHITE);
 
         JButton returnButton = new JButton("Return to Main Menu");
@@ -89,11 +116,8 @@ public class PlayerLobbyView extends JFrame {
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
+                stopTimer();
                 Player.gracefulExit();
-            }
-
-            @Override
-            public void windowClosed(WindowEvent e) {
             }
         });
     }
@@ -101,6 +125,7 @@ public class PlayerLobbyView extends JFrame {
     private void goToMainMenuOnce() {
         if (navigating) return;
         navigating = true;
+        stopTimer();
         dispose();
         PlayerMainMenuView.open(Player.getPlayerUsername());
     }

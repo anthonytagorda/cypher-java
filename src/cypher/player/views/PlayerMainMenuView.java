@@ -2,6 +2,7 @@ package cypher.player.views;
 
 import cypher.player.Player;
 import cypher.player.views.components.RoundButton;
+import cypher.player.views.components.fonts.FontLoader;
 
 import javax.swing.*;
 import java.awt.*;
@@ -69,7 +70,8 @@ public class PlayerMainMenuView extends JFrame {
 
         // Username Label
         JLabel usernameLabel = new JLabel(username.toUpperCase());
-        usernameLabel.setFont(new Font("Roboto", Font.BOLD, 18));
+        usernameLabel.setFont(new Font("PressStart2P", Font.BOLD, 18));
+        usernameLabel.setFont(FontLoader.loadFont(18f));
         usernameLabel.setForeground(Color.WHITE);
         usernameLabel.setBounds(20, 20, 200, 30);
         panel.add(usernameLabel);
@@ -79,7 +81,7 @@ public class PlayerMainMenuView extends JFrame {
         RoundButton playButton = new RoundButton("PLAY", playColor);
         playButton.setPreferredSize(new Dimension(240, 50));
         playButton.setForeground(Color.WHITE);
-        playButton.setFont(new Font("Arial", Font.BOLD, 18));
+        playButton.setFont(FontLoader.loadFont(20f));
         playButton.setBounds(350, 240, 240, 50);
         playButton.addActionListener(e -> {
             dispose();
@@ -91,6 +93,7 @@ public class PlayerMainMenuView extends JFrame {
 
         // Leaderboards Button
         RoundButton leaderboardsButton = createLeaderboardsButton();
+        leaderboardsButton.setFont(FontLoader.loadFont(14f));
         panel.add(leaderboardsButton);
 
         // Learn How to Play Button
@@ -98,7 +101,7 @@ public class PlayerMainMenuView extends JFrame {
         RoundButton howToPlayButton = new RoundButton("LEARN HOW TO PLAY", howToPlayColor);
         howToPlayButton.setPreferredSize(new Dimension(240, 50));
         howToPlayButton.setForeground(Color.WHITE);
-        howToPlayButton.setFont(new Font("Arial", Font.BOLD, 18));
+        howToPlayButton.setFont(FontLoader.loadFont(12f));
         howToPlayButton.setBounds(350, 360, 240, 50);
         howToPlayButton.addActionListener(e -> JOptionPane.showMessageDialog(
                 this,
@@ -118,7 +121,7 @@ public class PlayerMainMenuView extends JFrame {
         RoundButton logoutButton = new RoundButton("LOGOUT", logoutColor);
         logoutButton.setPreferredSize(new Dimension(200, 50));
         logoutButton.setForeground(Color.WHITE);
-        logoutButton.setFont(new Font("Arial", Font.BOLD, 18));
+        logoutButton.setFont(FontLoader.loadFont(14f));
         logoutButton.setBounds(50, 420, 130, 50);
         logoutButton.addActionListener(e -> {
             Player.logout();
@@ -171,7 +174,7 @@ public class PlayerMainMenuView extends JFrame {
         RoundButton leaderboardsButton = new RoundButton("LEADERBOARDS", leaderboardsColor);
         leaderboardsButton.setPreferredSize(new Dimension(240, 50));
         leaderboardsButton.setForeground(Color.WHITE);
-        leaderboardsButton.setFont(new Font("Arial", Font.BOLD, 18));
+        leaderboardsButton.setFont(new Font("PressStart2P", Font.BOLD, 18));
         leaderboardsButton.setBounds(350, 300, 240, 50);
         leaderboardsButton.addActionListener(e -> {
             PlayerLeaderboardsView leaderboardsView = new PlayerLeaderboardsView();

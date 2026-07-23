@@ -1,6 +1,7 @@
 package cypher.player.views;
 
 import cypher.player.Player;
+import cypher.player.views.components.fonts.FontLoader;
 
 import javax.swing.*;
 import java.awt.*;
@@ -61,20 +62,26 @@ public class PlayerLoginView extends JFrame {
         });
 
         // Layout
-        usernameLabel.setBounds(70, 210, 120, 25);
-        usernameLabel.setForeground(Color.WHITE);
+        usernameLabel.setBounds(80, 210, 120, 25);
+        passwordLabel.setBounds(80, 250, 120, 25);
 
-        passwordLabel.setBounds(70, 250, 120, 25);
+        usernameLabel.setFont(FontLoader.loadFont(10f));
+        passwordLabel.setFont(FontLoader.loadFont(10f));
+
+        usernameLabel.setForeground(Color.WHITE);
         passwordLabel.setForeground(Color.WHITE);
 
-        signUpLabel.setBounds(105, 335, 220, 30);
+        loginButton.setBounds(150, 300, 120, 40);
+        loginButton.setFont(FontLoader.loadFont(12f));
+
+        signUpLabel.setFont(FontLoader.loadFont(9f));
         signUpLabel.setForeground(Color.decode("#00ffff"));
+        signUpLabel.setBounds(65, 335, 300, 70);
         signUpLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        usernameField.setBounds(190, 210, 120, 25);
-        passwordField.setBounds(190, 250, 120, 25);
-
-        loginButton.setBounds(140, 300, 120, 30);
+        usernameField.setBounds(210, 210, 120, 25);
+        usernameField.setFont(FontLoader.loadFont(10f));
+        passwordField.setBounds(210, 250, 120, 25);
 
         imageLabel.setBounds(-250, -40, 900, 300);
 
