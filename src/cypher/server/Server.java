@@ -2,7 +2,6 @@ package cypher.server;
 
 import cypher.server.app.ServerApp;
 import cypher.server.app.ServerAppHelper;
-import cypher.server.tables.CypherDB;
 import cypher.server.views.ServerLauncherView;
 import org.omg.CORBA.ORB;
 import org.omg.CORBA.ORBPackage.InvalidName;

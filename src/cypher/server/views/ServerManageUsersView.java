@@ -1,5 +1,6 @@
 package cypher.server.views;
 
+import cypher.server.CypherDB;
 import cypher.server.Server;
 import cypher.server.tables.player.Player;
 
@@ -183,7 +184,7 @@ public class ServerManageUsersView extends JFrame {
         userModel.setRowCount(0);
 
         try {
-            List<Player> playerList = cypher.server.tables.CypherDB.getPlayers();
+            List<Player> playerList = CypherDB.getPlayers();
 
             for (Player p : playerList) {
                 userModel.addRow(new Object[]{
