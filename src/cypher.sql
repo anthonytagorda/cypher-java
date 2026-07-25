@@ -29,10 +29,15 @@ CREATE TABLE IF NOT EXISTS games (
     status           ENUM('WAITING','IN_PROGRESS','ENDED','CANCELLED') NOT NULL DEFAULT 'WAITING',
     started_at       DATETIME NULL,
     ended_at         DATETIME NULL,
+    player_winner    VARCHAR(50) NULL,
+    rounds_played    INT NOT NULL DEFAULT 0,
     created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_games_host
     FOREIGN KEY (host_player_id) REFERENCES players(player_id)
-    ON DELETE RESTRICT ON UPDATE CASCADE
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_games_winner_username
+    FOREIGN KEY (player_winner) REFERENCES players(username)
+    ON DELETE SET NULL ON UPDATE CASCADE
     );
 
 -- players inside a game
