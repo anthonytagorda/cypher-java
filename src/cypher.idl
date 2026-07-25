@@ -227,13 +227,30 @@ module cypher {
                             controller::exceptions::GameAlreadyStartedException);
 
                 /**
-                 * Places player in matchmaking queue or forms a game when criteria is met.
-                 * @return gameId when game is available.
-                 */
-                long findOrCreateGame(in long playerId)
-                    raises (controller::exceptions::NoPlayersAvailableException,
-                            controller::exceptions::GameAlreadyStartedException,
-                            controller::exceptions::PlayerAlreadyInQueueException);
+                * Searches for an existing game in "WAITING" status for the player to join.
+                * If no waiting game exists, returns a Game with gameId = 0 and empty fields
+                * so the client can decide whether to create a new game instead.
+                * @param playerId The player attempting to join a game.
+                * @return The found Game (joined), or an empty Game (gameId = 0) if none found.
+                */
+                tables::game::Game findNewGame(in long playerId);
+
+                /**
+                * Creates a brand new game in "WAITING" status with the given player as host,
+                * and joins that player to it.
+                * @param playerId The player creating and hosting the new game.
+                * @return The newly created Game record.
+                */
+                tables::game::Game createNewGame(in long playerId);
+
+                /**
+                * Lightweight matchmaking poll used by the lobby countdown.
+                * Checks whether at least one opponent has joined the player's
+                * current waiting game without creating or starting a game.
+                * @param playerId The player performing the check.
+                * @return true if the player's current waiting game already has 2+ players (i.e. an opponent has joined); false otherwise.
+                */
+                boolean hasOpponentJoined(in long playerId);
 
                 // Removes the player from the matchmaking queue before a game is found.
                 void cancelQueue(in long playerId)
