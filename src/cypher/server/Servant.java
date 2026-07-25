@@ -4,16 +4,21 @@ import cypher.player.app.PlayerApp;
 import cypher.server.app.ServerAppPOA;
 import cypher.server.config.GameConfig;
 import cypher.server.controller.exceptions.*;
-import cypher.server.tables.CypherDB;
+import cypher.server.tables.game.Game;
 import cypher.server.tables.leaderboard.LeaderboardEntry;
 import cypher.server.tables.player.Player;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("all")
 public class Servant extends ServerAppPOA {
+    private static final Map<Integer, cypher.player.app.PlayerApp> clients = new ConcurrentHashMap<>();
 
     @Override
     public boolean register(String username, String password) {
@@ -85,6 +90,12 @@ public class Servant extends ServerAppPOA {
                         e.message = "Player record not found after login.";
                         throw e;
                     }
+                    // register callback for this player so server can call back
+                    try {
+                        clients.put(p.playerId, callback);
+                    } catch (Throwable t) {
+                        System.err.println("Failed to register callback for player " + p.playerId + ": " + t.getMessage());
+                    }
                     return p.playerId;
                 }
                 case 1: {
@@ -118,6 +129,31 @@ public class Servant extends ServerAppPOA {
         }
     }
 
+    // Called by CypherDB when a waiting game becomes started (second player joined)
+    public static void notifyGameStarted(int gameId) {
+        try {
+            List<cypher.server.tables.player.Player> players = CypherDB.getPlayersInGame(gameId);
+            for (cypher.server.tables.player.Player p : players) {
+                cypher.player.app.PlayerApp app = clients.get(p.playerId);
+                if (app != null) {
+                    // Build opponents list
+                    java.util.List<String> opps = new java.util.ArrayList<>();
+                    for (cypher.server.tables.player.Player p2 : players) {
+                        if (p2.playerId != p.playerId) opps.add(p2.username);
+                    }
+                    String[] oppArray = opps.toArray(new String[0]);
+                    try {
+                        app.gameFound(gameId, oppArray);
+                    } catch (Exception ex) {
+                        System.err.println("Failed to call gameFound on player " + p.playerId + ": " + ex.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void logout(int playerId) {
         try {
@@ -134,13 +170,61 @@ public class Servant extends ServerAppPOA {
 
     @Override
     public void startGame(int gameId) throws GameNotFoundException, GameAlreadyStartedException {
+        try {
+            CypherDB.startGame(gameId);
 
+            // Fetch players and push initial letters to all clients so their in-game views open
+            java.util.List<cypher.server.tables.player.Player> players = CypherDB.getPlayersInGame(gameId);
+
+            // Generate letters (same logic as client)
+            String letters = generateLettersForRound();
+
+            for (cypher.server.tables.player.Player p : players) {
+                cypher.player.app.PlayerApp app = clients.get(p.playerId);
+                if (app != null) {
+                    try {
+                        app.sendLetters(letters);
+                    } catch (Exception ex) {
+                        System.err.println("Failed to send letters to player " + p.playerId + ": " + ex.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
+    private String generateLettersForRound() {
+        java.util.Random random = new java.util.Random();
+        StringBuilder letters = new StringBuilder();
+        String vowels = "aeiou";
+        String consonants = "bcdfghjklmnpqrstvwxyz";
+
+        for (int i = 0; i < 7; i++) letters.append(vowels.charAt(random.nextInt(vowels.length())));
+        for (int i = 0; i < 13; i++) letters.append(consonants.charAt(random.nextInt(consonants.length())));
+
+        java.util.List<Character> list = new java.util.ArrayList<>();
+        for (char c : letters.toString().toCharArray()) list.add(c);
+        java.util.Collections.shuffle(list);
+
+        StringBuilder out = new StringBuilder();
+        for (char c : list) out.append(c);
+        return out.toString();
+    }
 
     @Override
-    public int findOrCreateGame(int playerId) throws NoPlayersAvailableException, GameAlreadyStartedException, PlayerAlreadyInQueueException {
-        return playerId;
+    public Game findNewGame(int playerId) {
+        return CypherDB.findNewGame(playerId);
+    }
+
+    @Override
+    public Game createNewGame(int playerId) {
+        return CypherDB.createNewGame(playerId);
+    }
+
+    @Override
+    public boolean hasOpponentJoined(int playerId) {
+        return CypherDB.hasOpponentJoined(playerId);
     }
 
     @Override
@@ -150,12 +234,84 @@ public class Servant extends ServerAppPOA {
 
     @Override
     public void submitWord(int playerId, int gameId, String word) throws WordTooShortException, InvalidWordException, InvalidLettersException, RoundNotActiveException, NotInGameException {
+        if (word == null) {
+            WordTooShortException e = new WordTooShortException();
+            e.message = "Word cannot be null.";
+            throw e;
+        }
+        word = word.trim().toLowerCase();
+        if (word.length() < 4) {
+            WordTooShortException e = new WordTooShortException();
+            e.message = "Word too short (min 4).";
+            throw e;
+        }
 
+        // Minimal server-side handling: award points equal to word length to player's total_score
+        String update = "UPDATE game_players SET total_score = total_score + ? WHERE game_id = ? AND player_id = ?";
+        try (PreparedStatement ps = CypherDB.getConnection().prepareStatement(update)) {
+            ps.setInt(1, word.length());
+            ps.setInt(2, gameId);
+            ps.setInt(3, playerId);
+            int updated = ps.executeUpdate();
+            if (updated == 0) {
+                NotInGameException e = new NotInGameException();
+                e.message = "Player not in specified game.";
+                throw e;
+            }
+
+            // notify the submitting player that word was accepted
+            cypher.player.app.PlayerApp app = clients.get(playerId);
+            if (app != null) {
+                try {
+                    app.wordAccepted(word);
+                } catch (Exception ex) {
+                    System.err.println("Failed to call wordAccepted on player " + playerId + ": " + ex.getMessage());
+                }
+            }
+        } catch (NotInGameException e) {
+            throw e;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            InvalidLettersException ile = new InvalidLettersException();
+            ile.message = "Database error when submitting word.";
+            throw ile;
+        }
     }
 
     @Override
     public void leaveGame(int playerId, int gameId) throws NotInGameException {
+        try {
+            String winner = CypherDB.finalizeGameAndGetWinner(gameId);
 
+            List<java.util.Map<String, Object>> stats = CypherDB.getGamePlayersStats(gameId);
+
+            int n = stats.size();
+            String[] usernames = new String[n];
+            int[] roundWins = new int[n];
+            int[] totalScores = new int[n];
+
+            for (int i = 0; i < n; i++) {
+                Map<String, Object> m = stats.get(i);
+                usernames[i] = (String) m.get("username");
+                roundWins[i] = (int) m.get("round_wins");
+                totalScores[i] = (int) m.get("total_score");
+            }
+
+            // notify all players in the game
+            List<Player> players = CypherDB.getPlayersInGame(gameId);
+            for (Player p : players) {
+                cypher.player.app.PlayerApp app = clients.get(p.playerId);
+                if (app != null) {
+                    try {
+                        app.sendGameResult(usernames, roundWins, totalScores, winner);
+                    } catch (Exception ex) {
+                        System.err.println("Failed to call sendGameResult on player " + p.playerId + ": " + ex.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
