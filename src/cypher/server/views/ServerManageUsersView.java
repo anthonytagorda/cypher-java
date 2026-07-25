@@ -227,9 +227,12 @@ public class ServerManageUsersView extends JFrame {
             } else
                 if ("offline".equals(status)) {
                     c.setBackground(Color.decode("#D3D3D3"));
-                } else {
-                    c.setBackground(Color.WHITE);
-                }
+                } else
+                    if ("in-game".equals(status)) {
+                        c.setBackground(Color.decode("#FFFACD"));
+                    } else {
+                        c.setBackground(Color.WHITE);
+                    }
             return c;
         }
     }
