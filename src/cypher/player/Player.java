@@ -5,6 +5,8 @@ import cypher.player.app.PlayerAppHelper;
 import cypher.player.views.PlayerLoginView;
 import cypher.server.app.ServerApp;
 import cypher.server.app.ServerAppHelper;
+import cypher.server.config.GameConfig;
+import cypher.server.tables.game.Game;
 import cypher.server.tables.leaderboard.LeaderboardEntry;
 import org.omg.CORBA.ORB;
 import org.omg.CosNaming.NamingContextExt;
@@ -22,9 +24,12 @@ public class Player {
     private static final String CYPHER = "Cypher";
 
     private static ORB orb;
+    public static Game currentGame;
     private static ServerApp server;
     private static int playerId;
     private static String playerUsername;
+    private static boolean isHost = false;
+    private static boolean singlePlayerMode = false;
 
     public static void main(String[] args) {
         try {
@@ -34,7 +39,7 @@ public class Player {
             e.printStackTrace();
             JOptionPane.showMessageDialog(
                     null,
-                    "Failed to start player:\n" + e.getMessage(),
+                    "Server is offline.\n" + e.getClass().getSimpleName(),
                     "Player Error",
                     JOptionPane.ERROR_MESSAGE
             );
@@ -141,6 +146,7 @@ public class Player {
         }
     }
 
+    @SuppressWarnings("finally")
     public static void gracefulExit() {
         try {
             if (playerId > 0) {
@@ -160,5 +166,113 @@ public class Player {
                 JOptionPane.ERROR_MESSAGE
         );
         System.exit(0);
+    }
+
+    public static void findNewGame() {
+        try {
+            currentGame = server.findNewGame(playerId);
+            // joined game as non-host
+            isHost = false;
+            singlePlayerMode = false;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void createNewGame() {
+        try {
+            currentGame = server.createNewGame(playerId);
+            // if creation returned a valid game id, this client is the host
+            isHost = (currentGame != null && currentGame.gameId > 0);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static int getWaitingTime() {
+        if (currentGame == null || currentGame.startTime == null) return -999;
+
+        GameConfig cfg;
+        try {
+            cfg = server.getGameConfig();
+        } catch (Exception e) {
+            return -999;
+        }
+
+        long diffMs = System.currentTimeMillis() - java.sql.Timestamp.valueOf(currentGame.startTime).getTime();
+        return cfg.waitingTimeSecs - (int) (diffMs / 1000);
+    }
+
+    public static boolean hasOpponentJoined() {
+        try {
+            return server.hasOpponentJoined(playerId);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static void submitWord(String word) {
+        if (word == null || word.trim().isEmpty()) return;
+
+        if (currentGame == null) {
+            return;
+        }
+
+        try {
+            // Only call server when the game exists on the server (gameId>0).
+            if (currentGame.gameId > 0) {
+                server.submitWord(playerId, currentGame.gameId, word);
+            } else {
+                // local singleplayer: nothing to send, accept locally
+            }
+        } catch (org.omg.CORBA.COMM_FAILURE e) {
+            serverOfflineExit();
+        } catch (Exception e) {
+            // show error to the user but don't crash the client
+            e.printStackTrace();
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                    null,
+                    "Failed to submit word: " + e.getMessage(),
+                    "Submit Error",
+                    JOptionPane.ERROR_MESSAGE
+            ));
+        }
+    }
+
+    public static void leaveGame() {
+        try {
+            if (currentGame != null && currentGame.gameId > 0) {
+                server.leaveGame(playerId, currentGame.gameId);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void startGame(int gameId) {
+        try {
+            server.startGame(gameId);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static boolean isHost() {
+        return isHost;
+    }
+
+    public static void clearLocalGameState() {
+        currentGame = null;
+        isHost = false;
+        singlePlayerMode = false;
+    }
+
+    public static void setSinglePlayerMode(boolean single) {
+        singlePlayerMode = single;
+    }
+
+    public static boolean isSinglePlayerMode() {
+        return singlePlayerMode;
     }
 }
