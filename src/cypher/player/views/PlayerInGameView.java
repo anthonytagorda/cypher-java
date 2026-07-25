@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class PlayerInGameView extends JFrame {
-
     private static final int ROUND_DURATION_SECS = 60;
     private static final int NUM_LETTERS = 20;
     private static final Color ACCENT = Color.decode("#FF10F0");
@@ -29,7 +28,8 @@ public class PlayerInGameView extends JFrame {
 
     private JLabel roundLabel;
     private JLabel timerLabel;
-    private JLabel scoreLabel;
+    private JLabel roundScoreLabel;
+    private JLabel totalScoreLabel;
     private JLabel feedbackLabel;
     private JLabel timesUpLabel;
     private JTextField wordInputField;
@@ -126,11 +126,17 @@ public class PlayerInGameView extends JFrame {
         roundLabel.setFont(FontLoader.loadFont(20f));
         background.add(roundLabel);
 
-        scoreLabel = new JLabel("Round: 0 | Total: 0");
-        scoreLabel.setBounds(710, 110, 200, 25);
-        scoreLabel.setForeground(ACCENT);
-        scoreLabel.setFont(FontLoader.loadFont(20f));
-        background.add(scoreLabel);
+        roundScoreLabel = new JLabel("Round Score: 0");
+        roundScoreLabel.setBounds(710, 110, 250, 25);
+        roundScoreLabel.setForeground(ACCENT);
+        roundScoreLabel.setFont(FontLoader.loadFont(12f));
+        background.add(roundScoreLabel);
+
+        totalScoreLabel = new JLabel("Total Score: 0");
+        totalScoreLabel.setBounds(710, 130, 250, 25);
+        totalScoreLabel.setForeground(ACCENT);
+        totalScoreLabel.setFont(FontLoader.loadFont(12f));
+        background.add(totalScoreLabel);
 
         // "Valid word!" / error feedback — centered above the grid
         feedbackLabel = new JLabel("<html><center></center></html>", SwingConstants.CENTER);
@@ -410,7 +416,9 @@ public class PlayerInGameView extends JFrame {
         submittedWords.clear();
         submittedWordsLabel.setText("<html></html>");
         roundScore = 0;
-        scoreLabel.setText("Round: " + roundScore + " | Total: " + totalScore);
+        totalScore = 0;
+        roundScoreLabel.setText("Round Score: " + roundScore);
+        totalScoreLabel.setText("Total Score: " + totalScore);
 
         // Reset UI for a new round
         feedbackLabel.setText("");
@@ -434,27 +442,29 @@ public class PlayerInGameView extends JFrame {
         if (cypher.player.Player.currentGame == null || cypher.player.Player.currentGame.gameId == 0) {
             // Local singleplayer: show the post-round dialog and allow play again/end game
             SwingUtilities.invokeLater(() -> showGameResult(currentPlayerUsername));
-        } else if (cypher.player.Player.isSinglePlayerMode()) {
-            // Server-backed singleplayer: show play-again/end-game dialog.
-            SwingUtilities.invokeLater(() -> showGameResult(currentPlayerUsername));
-        } else {
-            // Server-backed game: only the host should request finalization. Non-hosts should wait
-            // for the server to push results via callbacks.
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    if (cypher.player.Player.isHost()) {
-                        JOptionPane.showMessageDialog(this, "Time's up!", "Round Over", JOptionPane.INFORMATION_MESSAGE);
-                        try {
-                            cypher.player.Player.leaveGame();
-                        } catch (Exception e) {
-                            e.printStackTrace();
+        } else
+            if (cypher.player.Player.isSinglePlayerMode()) {
+                // Server-backed singleplayer: show play-again/end-game dialog.
+                SwingUtilities.invokeLater(() -> showGameResult(currentPlayerUsername));
+            } else {
+                // Server-backed game: only the host should request finalization. Non-hosts should wait
+                // for the server to push results via callbacks.
+                SwingUtilities.invokeLater(() -> {
+                    try {
+                        if (cypher.player.Player.isHost()) {
+                            JOptionPane.showMessageDialog(this, "Time's up!", "Round Over", JOptionPane.INFORMATION_MESSAGE);
+                            try {
+                                cypher.player.Player.leaveGame();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        } else {
+                            JOptionPane.showMessageDialog(this, "Time's up! Waiting for host to finalize results...", "Round Over", JOptionPane.INFORMATION_MESSAGE);
                         }
-                    } else {
-                        JOptionPane.showMessageDialog(this, "Time's up! Waiting for host to finalize results...", "Round Over", JOptionPane.INFORMATION_MESSAGE);
+                    } catch (Exception ignored) {
                     }
-                } catch (Exception ignored) {}
-            });
-        }
+                });
+            }
     }
 
     private void submitCurrentWord() {
@@ -500,7 +510,7 @@ public class PlayerInGameView extends JFrame {
         String currentText = submittedWordsLabel.getText().replace("</html>", "");
         currentText += "<br>" + word + " (+" + word.length() + ")</html>";
         submittedWordsLabel.setText(currentText);
-        scoreLabel.setText("Round: " + roundScore + " | Total: " + totalScore);
+        roundScoreLabel.setText("Round Score: " + roundScore);
     }
 
     private HashSet<String> readValidWords() {
@@ -561,32 +571,32 @@ public class PlayerInGameView extends JFrame {
 
     public void showGameResult(String gameWinner) {
         SwingUtilities.invokeLater(() -> {
-                    // Multiplayer server-backed game: server already finalized and sent results.
-                    // Singleplayer server-backed games should still show the play-again/end-game option.
-                    if (cypher.player.Player.currentGame != null
-                            && cypher.player.Player.currentGame.gameId > 0
-                            && !cypher.player.Player.isSinglePlayerMode()) {
-                        JOptionPane.showMessageDialog(this,
-                                gameWinner.toUpperCase() + " won the game!",
-                                "Game Over",
-                                JOptionPane.INFORMATION_MESSAGE);
-                        dispose();
-                        new PlayerWinnerView(gameWinner, totalScore);
-                        return;
-                    }
+            // Multiplayer server-backed game: server already finalized and sent results.
+            // Singleplayer server-backed games should still show the play-again/end-game option.
+            if (cypher.player.Player.currentGame != null
+                    && cypher.player.Player.currentGame.gameId > 0
+                    && !cypher.player.Player.isSinglePlayerMode()) {
+                JOptionPane.showMessageDialog(this,
+                                              gameWinner.toUpperCase() + " won the game!",
+                                              "Game Over",
+                                              JOptionPane.INFORMATION_MESSAGE);
+                dispose();
+                new PlayerWinnerView(gameWinner, totalScore);
+                return;
+            }
 
             // Local singleplayer: offer the player a choice to play one more round or end the game
             Object[] options = {"Play another round", "End game"};
             ImageIcon icon = new ImageIcon("src/cypher/assets/cypher_logo.png");
             String message = gameWinner.toUpperCase() + " won this round!\nRound score: " + roundScore + "\nTotal score: " + totalScore + "\n\nWould you like to play another round?";
             int choice = JOptionPane.showOptionDialog(this,
-                    message,
-                    "Round Over",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE,
-                    icon,
-                    options,
-                    options[0]);
+                                                      message,
+                                                      "Round Over",
+                                                      JOptionPane.YES_NO_OPTION,
+                                                      JOptionPane.QUESTION_MESSAGE,
+                                                      icon,
+                                                      options,
+                                                      options[0]);
 
             if (choice == 0) {
                 roundNumber++;
@@ -630,9 +640,9 @@ public class PlayerInGameView extends JFrame {
     public void showServerFinalGameResult(String gameWinner) {
         SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(this,
-                    gameWinner.toUpperCase() + " won the game!",
-                    "Game Over",
-                    JOptionPane.INFORMATION_MESSAGE);
+                                          gameWinner.toUpperCase() + " won the game!",
+                                          "Game Over",
+                                          JOptionPane.INFORMATION_MESSAGE);
             dispose();
             new PlayerWinnerView(gameWinner, totalScore);
         });
