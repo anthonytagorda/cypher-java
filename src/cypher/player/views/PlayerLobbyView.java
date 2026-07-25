@@ -108,9 +108,9 @@ public class PlayerLobbyView extends JFrame {
         titleLabel.setFont(FontLoader.loadFont(10f));
         titleLabel.setForeground(Color.WHITE);
 
-        JLabel timerLabel = new JLabel("Status:");
-        timerLabel.setFont(FontLoader.loadFont(10f));
-        timerLabel.setForeground(Color.WHITE);
+        JLabel statusLabel = new JLabel("Status");
+        statusLabel.setFont(FontLoader.loadFont(10f));
+        statusLabel.setForeground(Color.WHITE);
 
         countdownLabel = new JLabel("--");
         countdownLabel.setFont(FontLoader.loadFont(10f));
@@ -209,7 +209,7 @@ public class PlayerLobbyView extends JFrame {
 
         gbc.gridx = 1;
         gbc.insets = new Insets(10, 10, 10, 20);
-        panel.add(timerLabel, gbc);
+        panel.add(statusLabel, gbc);
 
         gbc.gridy = 3;
         gbc.gridx = 1;
