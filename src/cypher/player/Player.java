@@ -7,7 +7,7 @@ import cypher.server.app.ServerApp;
 import cypher.server.app.ServerAppHelper;
 import cypher.server.config.GameConfig;
 import cypher.server.tables.game.Game;
-import cypher.server.tables.leaderboard.LeaderboardEntry;
+import cypher.server.tables.leaderboard.Leaderboards;
 import org.omg.CORBA.ORB;
 import org.omg.CosNaming.NamingContextExt;
 import org.omg.CosNaming.NamingContextExtHelper;
@@ -127,7 +127,7 @@ public class Player {
         return playerUsername;
     }
 
-    public static ArrayList<LeaderboardEntry> getLeaderboards() {
+    public static ArrayList<Leaderboards> getLeaderboards() {
         return new ArrayList<>(Arrays.asList(server.getLeaderboard()));
     }
 

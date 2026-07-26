@@ -178,14 +178,17 @@ module cypher {
             };
 
             module leaderboard {
-                struct LeaderboardEntry {
+                struct Leaderboards {
                     long rank;          // Position on leaderboard e.g. 1, 2, 3, 4, 5
                     string username;    // Player username
-                    long totalWins;     // Total game wins
+                    long gamesPlayed;   // Number of games played
+                    long gamesWon;      // Total game wins
+                    long highestScore;  // Highest score earned
                     string longestWord; // Longest word ever submitted by this player
+
                 };
-                // Sequence of LeaderboardEntry used as return type for getLeaderboard()
-                typedef sequence<LeaderboardEntry> Leaderboard;
+                // Sequence of Leaderboards used as return type for getLeaderboard()
+                typedef sequence<Leaderboards> Leaderboard;
             };
         };
 

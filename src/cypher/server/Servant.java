@@ -5,7 +5,7 @@ import cypher.server.app.ServerAppPOA;
 import cypher.server.config.GameConfig;
 import cypher.server.controller.exceptions.*;
 import cypher.server.tables.game.Game;
-import cypher.server.tables.leaderboard.LeaderboardEntry;
+import cypher.server.tables.leaderboard.Leaderboards;
 import cypher.server.tables.player.Player;
 
 import java.sql.Connection;
@@ -315,8 +315,8 @@ public class Servant extends ServerAppPOA {
     }
 
     @Override
-    public LeaderboardEntry[] getLeaderboard() {
-        return new LeaderboardEntry[0];
+    public Leaderboards[] getLeaderboard() {
+        return new Leaderboards[0];
     }
 
     @Override
