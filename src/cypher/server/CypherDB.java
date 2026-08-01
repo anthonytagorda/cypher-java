@@ -5,9 +5,9 @@ import cypher.server.tables.player.Player;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
 @SuppressWarnings("all")
 public class CypherDB {
@@ -172,12 +172,40 @@ public class CypherDB {
         }
     }
 
+    public static void resetAutoIncrement() {
+        try {
+            String maxQuery = "SELECT MAX(player_id) AS max_id FROM players";
+            String resetQuery = "ALTER TABLE players AUTO_INCREMENT = ?";
+
+            try (Statement stmt = getConnection().createStatement();
+                 ResultSet rs = stmt.executeQuery(maxQuery)
+            ) {
+                int maxId = 0;
+                if (rs.next()) {
+                    maxId = rs.getInt("max_id");
+                }
+
+                try (PreparedStatement ps = getConnection().prepareStatement(resetQuery)) {
+                    ps.setInt(1, maxId + 1);
+                    ps.executeUpdate();
+                    System.out.println("Reset AUTO_INCREMENT to " + (maxId + 1));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
     public static void banPlayer(int playerId) {
         String query = "UPDATE players SET is_banned = 1 WHERE player_id = ?";
         try (PreparedStatement ps = getConnection().prepareStatement(query)) {
             ps.setInt(1, playerId);
-            ps.executeUpdate();
-            System.out.println("Banned player " + playerId);
+            int updated = ps.executeUpdate();
+            if (updated > 0) {
+                Player p = getPlayerFromId(playerId);
+                String username = (p != null && p.username != null) ? p.username : "unknown";
+                System.out.println("Banned player: " + username + " (ID: " + playerId + ")");
+            }
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -187,11 +215,35 @@ public class CypherDB {
         String query = "UPDATE players SET is_banned = 0 WHERE player_id = ?";
         try (PreparedStatement ps = getConnection().prepareStatement(query)) {
             ps.setInt(1, playerId);
-            ps.executeUpdate();
-            System.out.println("Unbanned player " + playerId);
+            int updated = ps.executeUpdate();
+            if (updated > 0) {
+                Player p = getPlayerFromId(playerId);
+                String username = (p != null && p.username != null) ? p.username : "unknown";
+                System.out.println("Unbanned player: " + username + " (ID: " + playerId + ")");
+            }
         } catch (SQLException e) {
             e.printStackTrace();
         }
+    }
+
+    public static boolean registerPlayer(String username, String password) {
+        String query = "INSERT INTO players(username, password, status, is_banned, total_wins) VALUES (?, ?, 'offline', 0, 0)";
+        try (PreparedStatement ps = getConnection().prepareStatement(query)) {
+            ps.setString(1, username);
+            ps.setString(2, password);
+            int created = ps.executeUpdate();
+            if (created > 0) {
+                System.out.println("Added player: " + username);
+                return true;
+            }
+        } catch (SQLException e) {
+            if ("23000".equals(e.getSQLState())) {
+                System.out.println("Cannot add player. Username already exists: " + username);
+            } else {
+                e.printStackTrace();
+            }
+        }
+        return false;
     }
 
     public static String setPlayerOnline(int playerId) {
