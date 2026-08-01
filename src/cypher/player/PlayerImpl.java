@@ -26,9 +26,11 @@ public class PlayerImpl extends PlayerAppPOA {
                 if (lobby != null) {
                     try {
                         lobby.dispose();
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
 
             if (inGameView == null || !inGameView.isDisplayable()) {
                 inGameView = new PlayerInGameView();
@@ -75,9 +77,9 @@ public class PlayerImpl extends PlayerAppPOA {
                 inGameView = null;
             } else {
                 JOptionPane.showMessageDialog(null,
-                        gameWinner.toUpperCase() + " won the game!",
-                        "Game Over",
-                        JOptionPane.INFORMATION_MESSAGE);
+                                              gameWinner.toUpperCase() + " won the game!",
+                                              "Game Over",
+                                              JOptionPane.INFORMATION_MESSAGE);
                 new cypher.player.views.PlayerWinnerView(gameWinner, 0);
             }
             // Clear local game state after presenting final server result
@@ -121,7 +123,15 @@ public class PlayerImpl extends PlayerAppPOA {
 
     @Override
     public void notifyBanned() {
-        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "You are banned.", "Banned", JOptionPane.ERROR_MESSAGE));
+        SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "You have been banned. Logging you out...",
+                    "Banned",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            Player.forceLogoutAfterBan();
+        });
     }
 
     @Override

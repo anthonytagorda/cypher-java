@@ -275,4 +275,20 @@ public class Player {
     public static boolean isSinglePlayerMode() {
         return singlePlayerMode;
     }
+
+    @SuppressWarnings("finally")
+    public static void forceLogoutAfterBan() {
+        try {
+            if (playerId > 0) {
+                try {
+                    server.logout(playerId);
+                } catch (Exception ignored) {
+                    // Server may have already disconnected this player on the admin side.
+                }
+            }
+        } finally {
+            clearLocalGameState();
+            System.exit(0);
+        }
+    }
 }

@@ -8,9 +8,7 @@ import cypher.server.tables.game.Game;
 import cypher.server.tables.leaderboard.Leaderboards;
 import cypher.server.tables.player.Player;
 
-import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +16,23 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("all")
 public class Servant extends ServerAppPOA {
-    private static final Map<Integer, cypher.player.app.PlayerApp> clients = new ConcurrentHashMap<>();
+    private static final Map<Integer, PlayerApp> clients = new ConcurrentHashMap<>();
+
+    public static void notifyAndDisconnectBannedPlayer(int playerId) {
+        try {
+            PlayerApp app = clients.get(playerId);
+            if (app != null) {
+                try {
+                    app.notifyBanned();
+                } catch (Exception ex) {
+                    System.err.println("Failed to notify banned player " + playerId + ": " + ex.getMessage());
+                }
+            }
+        } finally {
+            clients.remove(playerId);
+            CypherDB.setPlayerOffline(playerId);
+        }
+    }
 
     @Override
     public boolean register(String username, String password) {
@@ -32,31 +46,7 @@ public class Servant extends ServerAppPOA {
         if (username.length() < 5 || username.length() > 30) return false;
         if (password.length() < 6 || password.length() > 30) return false;
 
-        final String checkSql = "SELECT 1 FROM players WHERE username = ? LIMIT 1";
-        final String insertSql =
-                "INSERT INTO players(username, password, status, is_banned, total_wins) " +
-                        "VALUES (?, ?, 'offline', 0, 0)";
-
-        try {
-            Connection conn = CypherDB.getConnection();
-
-            try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
-                checkStmt.setString(1, username);
-                try (ResultSet rs = checkStmt.executeQuery()) {
-                    if (rs.next()) return false;
-                }
-            }
-
-            try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
-                insertStmt.setString(1, username);
-                insertStmt.setString(2, password);
-                return insertStmt.executeUpdate() > 0;
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
+        return CypherDB.registerPlayer(username, password);
     }
 
     @Override
@@ -132,13 +122,13 @@ public class Servant extends ServerAppPOA {
     // Called by CypherDB when a waiting game becomes started (second player joined)
     public static void notifyGameStarted(int gameId) {
         try {
-            List<cypher.server.tables.player.Player> players = CypherDB.getPlayersInGame(gameId);
-            for (cypher.server.tables.player.Player p : players) {
-                cypher.player.app.PlayerApp app = clients.get(p.playerId);
+            List<Player> players = CypherDB.getPlayersInGame(gameId);
+            for (Player p : players) {
+                PlayerApp app = clients.get(p.playerId);
                 if (app != null) {
                     // Build opponents list
                     java.util.List<String> opps = new java.util.ArrayList<>();
-                    for (cypher.server.tables.player.Player p2 : players) {
+                    for (Player p2 : players) {
                         if (p2.playerId != p.playerId) opps.add(p2.username);
                     }
                     String[] oppArray = opps.toArray(new String[0]);
@@ -157,9 +147,10 @@ public class Servant extends ServerAppPOA {
     @Override
     public void logout(int playerId) {
         try {
-            cypher.server.tables.player.Player p = CypherDB.getPlayerFromId(playerId);
+            Player p = CypherDB.getPlayerFromId(playerId);
 
             CypherDB.setPlayerOffline(playerId);
+            clients.remove(playerId);
 
             String username = (p != null && p.username != null) ? p.username : ("id=" + playerId);
             System.out.println("[SERVER] Player logged out: " + username);
@@ -174,13 +165,13 @@ public class Servant extends ServerAppPOA {
             CypherDB.startGame(gameId);
 
             // Fetch players and push initial letters to all clients so their in-game views open
-            java.util.List<cypher.server.tables.player.Player> players = CypherDB.getPlayersInGame(gameId);
+            List<Player> players = CypherDB.getPlayersInGame(gameId);
 
             // Generate letters (same logic as client)
             String letters = generateLettersForRound();
 
-            for (cypher.server.tables.player.Player p : players) {
-                cypher.player.app.PlayerApp app = clients.get(p.playerId);
+            for (Player p : players) {
+                PlayerApp app = clients.get(p.playerId);
                 if (app != null) {
                     try {
                         app.sendLetters(letters);
@@ -260,7 +251,7 @@ public class Servant extends ServerAppPOA {
             }
 
             // notify the submitting player that word was accepted
-            cypher.player.app.PlayerApp app = clients.get(playerId);
+            PlayerApp app = clients.get(playerId);
             if (app != null) {
                 try {
                     app.wordAccepted(word);
@@ -283,7 +274,7 @@ public class Servant extends ServerAppPOA {
         try {
             String winner = CypherDB.finalizeGameAndGetWinner(gameId);
 
-            List<java.util.Map<String, Object>> stats = CypherDB.getGamePlayersStats(gameId);
+            List<Map<String, Object>> stats = CypherDB.getGamePlayersStats(gameId);
 
             int n = stats.size();
             String[] usernames = new String[n];
@@ -300,7 +291,7 @@ public class Servant extends ServerAppPOA {
             // notify all players in the game
             List<Player> players = CypherDB.getPlayersInGame(gameId);
             for (Player p : players) {
-                cypher.player.app.PlayerApp app = clients.get(p.playerId);
+                PlayerApp app = clients.get(p.playerId);
                 if (app != null) {
                     try {
                         app.sendGameResult(usernames, roundWins, totalScores, winner);
