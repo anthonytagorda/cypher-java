@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE TABLE IF NOT EXISTS games (
     game_id          INT AUTO_INCREMENT PRIMARY KEY,
     host_player_id   INT NOT NULL,
+    game_type        ENUM('multiplayer','singleplayer') NOT NULL DEFAULT 'multiplayer',
     status           ENUM('WAITING','IN_PROGRESS','ENDED','CANCELLED') NOT NULL DEFAULT 'WAITING',
     started_at       DATETIME NULL,
     ended_at         DATETIME NULL,
@@ -124,8 +125,10 @@ CREATE TABLE IF NOT EXISTS leaderboard (
 CREATE TABLE settings (
     id                INT PRIMARY KEY,
     waiting_time_sec  INT NOT NULL DEFAULT 30,
-    game_duration_sec INT NOT NULL DEFAULT 180
+    game_duration_sec INT NOT NULL DEFAULT 180,
+    max_players       INT NOT NULL DEFAULT 2,
+    rounds_to_win     INT NOT NULL DEFAULT 3
 );
 
-INSERT INTO settings (id, waiting_time_sec, game_duration_sec)
-VALUES (1, 30, 180);
+INSERT INTO settings (id, waiting_time_sec, game_duration_sec, max_players, rounds_to_win)
+VALUES (1, 30, 180, 2, 3);
