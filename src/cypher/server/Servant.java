@@ -10,8 +10,7 @@ import cypher.server.tables.player.Player;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("all")
@@ -127,7 +126,7 @@ public class Servant extends ServerAppPOA {
                 PlayerApp app = clients.get(p.playerId);
                 if (app != null) {
                     // Build opponents list
-                    java.util.List<String> opps = new java.util.ArrayList<>();
+                    List<String> opps = new ArrayList<>();
                     for (Player p2 : players) {
                         if (p2.playerId != p.playerId) opps.add(p2.username);
                     }
@@ -186,7 +185,7 @@ public class Servant extends ServerAppPOA {
     }
 
     private String generateLettersForRound() {
-        java.util.Random random = new java.util.Random();
+        Random random = new Random();
         StringBuilder letters = new StringBuilder();
         String vowels = "aeiou";
         String consonants = "bcdfghjklmnpqrstvwxyz";
@@ -194,9 +193,9 @@ public class Servant extends ServerAppPOA {
         for (int i = 0; i < 7; i++) letters.append(vowels.charAt(random.nextInt(vowels.length())));
         for (int i = 0; i < 13; i++) letters.append(consonants.charAt(random.nextInt(consonants.length())));
 
-        java.util.List<Character> list = new java.util.ArrayList<>();
+        List<Character> list = new ArrayList<>();
         for (char c : letters.toString().toCharArray()) list.add(c);
-        java.util.Collections.shuffle(list);
+        Collections.shuffle(list);
 
         StringBuilder out = new StringBuilder();
         for (char c : list) out.append(c);
@@ -312,21 +311,46 @@ public class Servant extends ServerAppPOA {
 
     @Override
     public GameConfig getGameConfig() {
-        return null;
+        Map<String, Integer> s = CypherDB.getGameSettings();
+        if (s.isEmpty()) return new GameConfig(30, 180, 2, 3);
+        return new GameConfig(
+                s.getOrDefault("waiting_time_sec", 30),
+                s.getOrDefault("game_duration_sec", 180),
+                s.getOrDefault("max_players", 2),
+                s.getOrDefault("rounds_to_win", 3)
+        );
     }
 
     @Override
     public void setWaitingTime(int seconds) {
-
+        Map<String, Integer> s = CypherDB.getGameSettings();
+        CypherDB.updateGameSettings(
+                seconds,
+                s.getOrDefault("game_duration_sec", 180),
+                s.getOrDefault("max_players", 2),
+                s.getOrDefault("rounds_to_win", 3)
+        );
     }
 
     @Override
     public void setRoundDuration(int seconds) {
-
+        Map<String, Integer> s = CypherDB.getGameSettings();
+        CypherDB.updateGameSettings(
+                s.getOrDefault("waiting_time_sec", 30),
+                seconds,
+                s.getOrDefault("max_players", 2),
+                s.getOrDefault("rounds_to_win", 3)
+        );
     }
 
     @Override
     public void setMaxPlayers(int maxPlayers) {
-
+        Map<String, Integer> s = CypherDB.getGameSettings();
+        CypherDB.updateGameSettings(
+                s.getOrDefault("waiting_time_sec", 30),
+                s.getOrDefault("game_duration_sec", 180),
+                maxPlayers,
+                s.getOrDefault("rounds_to_win", 3)
+        );
     }
 }
