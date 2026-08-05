@@ -11,17 +11,15 @@ import java.awt.event.WindowEvent;
 
 public class PlayerLobbyView extends JFrame {
     private static PlayerLobbyView instance;
-    private JLabel countdownLabel;
+    private JLabel lobbyStatusValueLabel;
+    private JLabel gameIdValueLabel;
+    private JLabel playersJoinedValueLabel;
 
-    private int waitingTime;
-    private Timer timer;
     private boolean navigating = false;
     private DefaultListModel<String> lobbyListModel;
-    private Timer joinPollTimer;
     private boolean hosting = false;
     private JButton beginButton;
     private Timer joinCountdownTimer;
-    private int joinCountdownSecs = 30; // seconds to wait for opponent
     private JScrollPane listScroll;
 
     public PlayerLobbyView() {
@@ -35,45 +33,18 @@ public class PlayerLobbyView extends JFrame {
     }
 
     public void onOpponentsJoined(String[] opponents) {
-        if (opponents == null) return;
-        // stop join countdown if running
-        try {
-            if (joinCountdownTimer != null && joinCountdownTimer.isRunning()) joinCountdownTimer.stop();
-        } catch (Exception ignored) {
+        // DB refresh is authoritative; callback payload is used as immediate UI hint.
+        int callbackOpponentCount = (opponents == null) ? 0 : opponents.length;
+        if (callbackOpponentCount > 0) {
+            setPlayersJoinedCount(callbackOpponentCount + 1);
         }
-        lobbyListModel.clear();
-        String username = Player.getPlayerUsername() == null ? "Player" : Player.getPlayerUsername();
-        lobbyListModel.addElement(username + (hosting ? " (Host)" : " (You)"));
-        for (String o : opponents) {
-            lobbyListModel.addElement(o);
-        }
-        countdownLabel.setText("Opponent(s) joined");
+        // Callback can arrive at both host and joiners; keep countdown active for both.
+        refreshLobbyPlayersFromOpponents(opponents);
+        setLobbyStatus("Waiting");
+        startLobbyCountdown(null);
         if (hosting && beginButton != null) {
             beginButton.setEnabled(true);
             beginButton.setVisible(true);
-        }
-    }
-
-    private void startTimer() {
-        countdownLabel.setText(String.valueOf(waitingTime));
-
-        timer = new Timer(1000, e -> {
-            waitingTime--;
-            countdownLabel.setText(String.valueOf(Math.max(waitingTime, 0)));
-
-            if (waitingTime <= 0) {
-                stopTimer();
-                dispose();
-                new PlayerInGameView();
-            }
-        });
-
-        timer.start();
-    }
-
-    private void stopTimer() {
-        if (timer != null && timer.isRunning()) {
-            timer.stop();
         }
     }
 
@@ -108,26 +79,32 @@ public class PlayerLobbyView extends JFrame {
         titleLabel.setFont(FontLoader.loadFont(10f));
         titleLabel.setForeground(Color.WHITE);
 
-        JLabel statusLabel = new JLabel("Status");
+        JLabel statusLabel = new JLabel("Status:");
         statusLabel.setFont(FontLoader.loadFont(10f));
         statusLabel.setForeground(Color.WHITE);
 
-        countdownLabel = new JLabel("--");
-        countdownLabel.setFont(FontLoader.loadFont(10f));
-        countdownLabel.setForeground(Color.WHITE);
+        lobbyStatusValueLabel = new JLabel("Waiting");
+        lobbyStatusValueLabel.setFont(FontLoader.loadFont(10f));
+        lobbyStatusValueLabel.setForeground(Color.WHITE);
 
         // Lobby players list (Multiplayer mode)
         lobbyListModel = new DefaultListModel<>();
         JList<String> playersList = new JList<>(lobbyListModel);
         playersList.setVisibleRowCount(6);
-        playersList.setFixedCellWidth(200);
+        playersList.setFixedCellWidth(240);
         playersList.setFont(FontLoader.loadFont(12f));
         playersList.setOpaque(false);
+        playersList.setForeground(Color.WHITE);
+        playersList.setBackground(new Color(0, 0, 0, 0));
+        playersList.setSelectionBackground(new Color(255, 16, 240, 120));
+        playersList.setSelectionForeground(Color.WHITE);
 
         listScroll = new JScrollPane(playersList);
         listScroll.setOpaque(false);
         listScroll.getViewport().setOpaque(false);
-        listScroll.setPreferredSize(new Dimension(220, 160));
+        listScroll.setPreferredSize(new Dimension(260, 220));
+        listScroll.setMinimumSize(new Dimension(260, 220));
+        listScroll.setMaximumSize(new Dimension(260, 220));
         listScroll.setVisible(false);   // False for Singleplayer mode
 
         JButton returnButton = new JButton("Return to Main Menu");
@@ -135,8 +112,26 @@ public class PlayerLobbyView extends JFrame {
         returnButton.setBackground(new Color(0, 128, 0));
         returnButton.setFocusPainted(false);
         returnButton.setPreferredSize(new Dimension(300, 45));
+        returnButton.setMinimumSize(new Dimension(300, 45));
+        returnButton.setMaximumSize(new Dimension(300, 45));
         returnButton.setFont(FontLoader.loadFont(12f));
         returnButton.addActionListener(e -> goToMainMenuOnce());
+
+        JLabel gameIdLabel = new JLabel("Game ID:");
+        gameIdLabel.setFont(FontLoader.loadFont(10f));
+        gameIdLabel.setForeground(Color.WHITE);
+
+        gameIdValueLabel = new JLabel("-");
+        gameIdValueLabel.setFont(FontLoader.loadFont(10f));
+        gameIdValueLabel.setForeground(Color.WHITE);
+
+        JLabel playersJoinedLabel = new JLabel("Players Joined:");
+        playersJoinedLabel.setFont(FontLoader.loadFont(10f));
+        playersJoinedLabel.setForeground(Color.WHITE);
+
+        playersJoinedValueLabel = new JLabel("0");
+        playersJoinedValueLabel.setFont(FontLoader.loadFont(10f));
+        playersJoinedValueLabel.setForeground(Color.WHITE);
 
         // Mode selection (single / multi)
         JRadioButton singleBtn = new JRadioButton("Single Player");
@@ -150,44 +145,50 @@ public class PlayerLobbyView extends JFrame {
         modeGroup.add(singleBtn);
         modeGroup.add(multiBtn);
 
-        JButton startButton = getJButton(singleBtn, multiBtn, username);
+        JButton startButton = getJButton(singleBtn, multiBtn);
 
         JButton joinButton = new JButton("Join Game");
         joinButton.setPreferredSize(new Dimension(120, 36));
         joinButton.setFocusPainted(false);
         joinButton.setVisible(false); // hidden initially (singleplayer default)
         joinButton.addActionListener(e -> {
-            // Attempt to join an existing waiting game
             Player.findNewGame();
             if (Player.currentGame != null && Player.currentGame.gameId > 0) {
                 Player.setSinglePlayerMode(false);
-                // joined successfully: update lobby list and wait for host to begin
-                lobbyListModel.clear();
-                // fetch players in this game from server if available (server will notify via callback too)
-                lobbyListModel.addElement(Player.getPlayerUsername() + " (Joined)");
+                hosting = false;
+                showCurrentPlayerInLobby();
+                updateGameIdLabel();
+                setLobbyStatus("Waiting");
+                startLobbyCountdown(() -> setLobbyStatus("Cancelled"));
                 JOptionPane.showMessageDialog(this, "Joined game " + Player.currentGame.gameId + ". Waiting for host to begin.", "Joined", JOptionPane.INFORMATION_MESSAGE);
             } else {
                 JOptionPane.showMessageDialog(null, "No available games to join.", "Join Failed", JOptionPane.WARNING_MESSAGE);
             }
         });
 
-        // Toggle visibility and button labels when switching modes
         singleBtn.addActionListener(e -> {
             joinButton.setVisible(false);
             startButton.setText("Start");
-            countdownLabel.setText("Singleplayer");
-            // hide lobby list in singleplayer
+            setLobbyStatus("Waiting");
             listScroll.setVisible(false);
             lobbyListModel.clear();
+            setPlayersJoinedCount(0);
+            gameIdValueLabel.setText("-");
+            stopLobbyCountdown();
+            beginButton.setVisible(false);
+            beginButton.setEnabled(false);
+            panel.revalidate();
+            panel.repaint();
         });
         multiBtn.addActionListener(e -> {
             joinButton.setVisible(true);
             startButton.setText("Host Game");
-            countdownLabel.setText("--");
-            // show lobby list in multiplayer
+            setLobbyStatus("Waiting");
             listScroll.setVisible(true);
-            lobbyListModel.clear();
-            lobbyListModel.addElement(username + " (You)");
+            showCurrentPlayerInLobby();
+            updateGameIdLabel();
+            panel.revalidate();
+            panel.repaint();
         });
 
         // Layout: left = players list, right = controls
@@ -204,34 +205,60 @@ public class PlayerLobbyView extends JFrame {
         gbc.gridwidth = 1;
         gbc.gridy = 2;
         gbc.gridx = 0;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
         gbc.insets = new Insets(10, 20, 10, 10);
         panel.add(listScroll, gbc);
 
         gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0;
+        gbc.weighty = 0;
         gbc.insets = new Insets(10, 10, 10, 20);
         panel.add(statusLabel, gbc);
 
         gbc.gridy = 3;
         gbc.gridx = 1;
         gbc.insets = new Insets(0, 10, 10, 20);
-        panel.add(countdownLabel, gbc);
+        panel.add(lobbyStatusValueLabel, gbc);
 
         gbc.gridy = 4;
+        gbc.gridx = 1;
+        gbc.insets = new Insets(0, 10, 10, 20);
+        panel.add(gameIdLabel, gbc);
+
+        gbc.gridy = 5;
+        gbc.gridx = 1;
+        gbc.insets = new Insets(0, 10, 10, 20);
+        panel.add(gameIdValueLabel, gbc);
+
+        gbc.gridy = 6;
+        gbc.gridx = 1;
+        gbc.insets = new Insets(0, 10, 10, 20);
+        panel.add(playersJoinedLabel, gbc);
+
+        gbc.gridy = 7;
+        gbc.gridx = 1;
+        gbc.insets = new Insets(0, 10, 10, 20);
+        panel.add(playersJoinedValueLabel, gbc);
+
+        gbc.gridy = 9;
         gbc.gridx = 1;
         gbc.insets = new Insets(10, 10, 6, 20);
         panel.add(singleBtn, gbc);
 
-        gbc.gridy = 5;
+        gbc.gridy = 10;
         gbc.gridx = 1;
         gbc.insets = new Insets(6, 10, 6, 20);
         panel.add(multiBtn, gbc);
 
-        gbc.gridy = 6;
+        gbc.gridy = 11;
         gbc.gridx = 1;
         gbc.insets = new Insets(10, 10, 6, 20);
         panel.add(startButton, gbc);
 
-        gbc.gridy = 7;
+        gbc.gridy = 12;
         gbc.gridx = 1;
         gbc.insets = new Insets(6, 10, 6, 20);
         panel.add(joinButton, gbc);
@@ -243,19 +270,18 @@ public class PlayerLobbyView extends JFrame {
         beginButton.setVisible(false);
         beginButton.setEnabled(false);
         beginButton.addActionListener(ev -> {
-            // host starts the game explicitly
             if (Player.currentGame != null && Player.currentGame.gameId > 0) {
                 Player.startGame(Player.currentGame.gameId);
             }
         });
 
-        gbc.gridy = 8;
+        gbc.gridy = 13;
         gbc.gridx = 1;
         gbc.insets = new Insets(6, 10, 6, 20);
         panel.add(beginButton, gbc);
 
         gbc.gridx = 0;
-        gbc.gridy = 9;
+        gbc.gridy = 14;
         gbc.gridwidth = 2;
         gbc.insets = new Insets(20, 20, 20, 20);
         panel.add(returnButton, gbc);
@@ -265,51 +291,36 @@ public class PlayerLobbyView extends JFrame {
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                stopTimer();
+                stopLobbyCountdown();
                 Player.gracefulExit();
             }
         });
     }
 
-    private JButton getJButton(JRadioButton singleBtn, JRadioButton multiBtn, String username) {
+    private JButton getJButton(JRadioButton singleBtn, JRadioButton multiBtn) {
         JButton startButton = new JButton("Start Game");
         startButton.setPreferredSize(new Dimension(160, 36));
         startButton.setFocusPainted(false);
         startButton.addActionListener(ev -> {
             if (singleBtn.isSelected()) {
                 Player.setSinglePlayerMode(true);
-                // Singleplayer: attempt to create a server-backed game so it is persisted in DB.
-                // If server creation/start fails, fall back to local-only mode.
-                try {
-                    Player.createNewGame();
-                    if (Player.currentGame != null && Player.currentGame.gameId > 0) {
-                        // request server to start the game so started_at/status are set
-                        Player.startGame(Player.currentGame.gameId);
-                        // rely on server callback (sendLetters) to open the in-game view for all players
-                        return;
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                // Fallback: If server is unavailable or creation failed, run local-only game
+                // Singleplayer should remain local-only and should not create a DB-backed game ID.
                 Game g = new Game();
                 g.gameId = 0; // local-only
                 Player.currentGame = g;
+                stopLobbyCountdown();
                 // dispose lobby and open local in-game UI
                 dispose();
                 new PlayerInGameView();
                 return;
             }
 
-            // Multiplayer flow: create game on server and wait for opponent. Host must explicitly begin.
             Player.setSinglePlayerMode(false);
             startButton.setEnabled(false);
             multiBtn.setEnabled(false);
             singleBtn.setEnabled(false);
-            countdownLabel.setText("Creating game...");
+            setLobbyStatus("Waiting");
 
-            // Create game on server (adds DB entry)
             SwingUtilities.invokeLater(() -> {
                 Player.createNewGame();
                 if (Player.currentGame == null || Player.currentGame.gameId == 0) {
@@ -317,40 +328,27 @@ public class PlayerLobbyView extends JFrame {
                     startButton.setEnabled(true);
                     multiBtn.setEnabled(true);
                     singleBtn.setEnabled(true);
-                    countdownLabel.setText("--");
+                    setLobbyStatus("Cancelled");
                     return;
                 }
 
                 hosting = true;
-                lobbyListModel.clear();
-                lobbyListModel.addElement(username + " (Host)");
-                countdownLabel.setText("Waiting for opponent...");
+                showCurrentPlayerInLobby();
+                updateGameIdLabel();
+                setLobbyStatus("Waiting");
 
-                // Show the Begin button so host can start when ready (it will be enabled when opponent joins via callback)
                 if (instance != null) {
                     instance.beginButton.setVisible(true);
                     instance.beginButton.setEnabled(false);
-                    // start join countdown
-                    if (instance.joinCountdownTimer != null && instance.joinCountdownTimer.isRunning())
-                        instance.joinCountdownTimer.stop();
-                    instance.joinCountdownSecs = 30;
-                    instance.joinCountdownTimer = new Timer(1000, ev2 -> {
-                        instance.joinCountdownSecs--;
-                        instance.countdownLabel.setText("Waiting: " + instance.joinCountdownSecs + "s");
-                        if (instance.joinCountdownSecs <= 0) {
-                            instance.joinCountdownTimer.stop();
-                            JOptionPane.showMessageDialog(instance, "No opponent joined in time.", "Timeout", JOptionPane.INFORMATION_MESSAGE);
-                            // reset UI
-                            instance.beginButton.setVisible(false);
-                            instance.beginButton.setEnabled(false);
-                            startButton.setEnabled(true);
-                            multiBtn.setEnabled(true);
-                            singleBtn.setEnabled(true);
-                            instance.countdownLabel.setText("--");
-                        }
+                    instance.startLobbyCountdown(() -> {
+                        JOptionPane.showMessageDialog(instance, "No opponent joined in time.", "Timeout", JOptionPane.INFORMATION_MESSAGE);
+                        instance.beginButton.setVisible(false);
+                        instance.beginButton.setEnabled(false);
+                        startButton.setEnabled(true);
+                        multiBtn.setEnabled(true);
+                        singleBtn.setEnabled(true);
+                        instance.setLobbyStatus("Cancelled");
                     });
-                    instance.joinCountdownTimer.setInitialDelay(0);
-                    instance.joinCountdownTimer.start();
                 }
             });
         });
@@ -360,8 +358,81 @@ public class PlayerLobbyView extends JFrame {
     private void goToMainMenuOnce() {
         if (navigating) return;
         navigating = true;
-        stopTimer();
+        stopLobbyCountdown();
         dispose();
         PlayerMainMenuView.open(Player.getPlayerUsername());
+    }
+
+    private void showCurrentPlayerInLobby() {
+        if (lobbyListModel == null) return;
+        lobbyListModel.clear();
+        String currentUser = Player.getPlayerUsername() == null ? "Player" : Player.getPlayerUsername();
+        lobbyListModel.addElement(currentUser + (Player.isHost() ? " (Host)" : " (You)"));
+        setPlayersJoinedCount(lobbyListModel.getSize());
+    }
+
+    private void refreshLobbyPlayersFromOpponents(String[] opponents) {
+        if (lobbyListModel == null) return;
+
+        showCurrentPlayerInLobby();
+        if (opponents != null) {
+            for (String opponent : opponents) {
+                if (opponent == null || opponent.trim().isEmpty()) continue;
+                lobbyListModel.addElement(opponent.trim());
+            }
+        }
+
+        setPlayersJoinedCount(lobbyListModel.getSize());
+        listScroll.setVisible(true);
+        listScroll.revalidate();
+        listScroll.repaint();
+
+        if (lobbyListModel.getSize() > 1 && beginButton != null && hosting) {
+            beginButton.setEnabled(true);
+        }
+    }
+
+    private void startLobbyCountdown(Runnable onTimeout) {
+        stopLobbyCountdown();
+        joinCountdownTimer = new Timer(1000, e -> {
+            int remaining = Player.getWaitingTime();
+            if (remaining < 0) {
+                return;
+            }
+
+            if (remaining == 0) {
+                stopLobbyCountdown();
+                if (onTimeout != null) onTimeout.run();
+            }
+        });
+        joinCountdownTimer.setInitialDelay(0);
+        joinCountdownTimer.start();
+    }
+
+    private void stopLobbyCountdown() {
+        if (joinCountdownTimer != null && joinCountdownTimer.isRunning()) {
+            joinCountdownTimer.stop();
+        }
+    }
+
+    private void setLobbyStatus(String status) {
+        if (lobbyStatusValueLabel != null) {
+            lobbyStatusValueLabel.setText(status == null ? "" : status);
+        }
+    }
+
+    private void updateGameIdLabel() {
+        if (gameIdValueLabel == null) return;
+        if (Player.currentGame != null && Player.currentGame.gameId > 0) {
+            gameIdValueLabel.setText(String.valueOf(Player.currentGame.gameId));
+        } else {
+            gameIdValueLabel.setText("-");
+        }
+    }
+
+    private void setPlayersJoinedCount(int count) {
+        if (playersJoinedValueLabel != null) {
+            playersJoinedValueLabel.setText(String.valueOf(Math.max(count, 0)));
+        }
     }
 }
