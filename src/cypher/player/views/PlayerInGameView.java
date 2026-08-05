@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class PlayerInGameView extends JFrame {
-    private static final int ROUND_DURATION_SECS = 60;
     private static final int NUM_LETTERS = 20;
     private static final Color ACCENT = Color.decode("#FF10F0");
     private static final Color BG = Color.decode("#0f091e");
@@ -45,9 +44,11 @@ public class PlayerInGameView extends JFrame {
     private final List<Integer> selectedIndices = new ArrayList<>();
     private String letters = "";
     private int roundNumber = 1;
-    private int timeLeft = ROUND_DURATION_SECS;
+    private int timeLeft = Player.getRoundDurationSeconds();
     private int roundScore = 0;
     private int totalScore = 0;
+    private int playerRoundWins = 0;
+    private boolean boardInitialized = false;
     private Timer timer;
     private final String currentPlayerUsername;
 
@@ -60,7 +61,9 @@ public class PlayerInGameView extends JFrame {
         initComponents();
         setVisible(true);
 
-        generateGameBoard(generateLetters()); // generate letters locally until server-side round dispatch is wired back in.
+        if (Player.currentGame == null || Player.currentGame.gameId == 0 || Player.isSinglePlayerMode()) {
+            generateGameBoard(generateLetters());
+        }
     }
 
     private void initComponents() {
@@ -301,6 +304,14 @@ public class PlayerInGameView extends JFrame {
 
     // ── Called by PlayerImpl.sendLetters(letters) once server dispatch is restored ──
     public void generateGameBoard(String newLetters) {
+        if (boardInitialized
+                && Player.currentGame != null
+                && Player.currentGame.gameId > 0
+                && !Player.isSinglePlayerMode()) {
+            roundNumber++;
+            roundLabel.setText("Round " + roundNumber);
+        }
+
         this.letters = newLetters;
         selectedIndices.clear();
         wordInputField.setText("");
@@ -328,6 +339,7 @@ public class PlayerInGameView extends JFrame {
         gridPanel.repaint();
 
         refreshButtonStates();
+        boardInitialized = true;
         startRound();
     }
 
@@ -408,7 +420,7 @@ public class PlayerInGameView extends JFrame {
     }
 
     private void startRound() {
-        timeLeft = ROUND_DURATION_SECS;
+        timeLeft = Player.getRoundDurationSeconds();
 
         timerLabel.setText("Time Left: " + timeLeft);
         timerLabel.setForeground(Color.GREEN);
@@ -416,7 +428,6 @@ public class PlayerInGameView extends JFrame {
         submittedWords.clear();
         submittedWordsLabel.setText("<html></html>");
         roundScore = 0;
-        totalScore = 0;
         roundScoreLabel.setText("Round Score: " + roundScore);
         totalScoreLabel.setText("Total Score: " + totalScore);
 
@@ -447,19 +458,31 @@ public class PlayerInGameView extends JFrame {
                 // Server-backed singleplayer: show play-again/end-game dialog.
                 SwingUtilities.invokeLater(() -> showGameResult(currentPlayerUsername));
             } else {
-                // Server-backed game: only the host should request finalization. Non-hosts should wait
-                // for the server to push results via callbacks.
+                // Multiplayer: continue until the configured rounds-to-win limit is reached.
                 SwingUtilities.invokeLater(() -> {
                     try {
+                        boolean isFinalConfiguredRound = roundNumber >= Player.getRoundsToWin();
                         if (cypher.player.Player.isHost()) {
-                            JOptionPane.showMessageDialog(this, "Time's up!", "Round Over", JOptionPane.INFORMATION_MESSAGE);
-                            try {
-                                cypher.player.Player.leaveGame();
-                            } catch (Exception e) {
-                                e.printStackTrace();
+                            if (isFinalConfiguredRound) {
+                                JOptionPane.showMessageDialog(this, "Time's up! Finalizing game results...", "Round Over", JOptionPane.INFORMATION_MESSAGE);
+                                try {
+                                    cypher.player.Player.leaveGame();
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                            } else {
+                                JOptionPane.showMessageDialog(this, "Time's up! Starting the next round...", "Round Over", JOptionPane.INFORMATION_MESSAGE);
+                                cypher.player.Player.startGame(cypher.player.Player.currentGame.gameId);
                             }
                         } else {
-                            JOptionPane.showMessageDialog(this, "Time's up! Waiting for host to finalize results...", "Round Over", JOptionPane.INFORMATION_MESSAGE);
+                            JOptionPane.showMessageDialog(
+                                    this,
+                                    isFinalConfiguredRound
+                                            ? "Time's up! Waiting for final game results..."
+                                            : "Time's up! Waiting for host to start the next round...",
+                                    "Round Over",
+                                    JOptionPane.INFORMATION_MESSAGE
+                            );
                         }
                     } catch (Exception ignored) {
                     }
@@ -511,6 +534,7 @@ public class PlayerInGameView extends JFrame {
         currentText += "<br>" + word + " (+" + word.length() + ")</html>";
         submittedWordsLabel.setText(currentText);
         roundScoreLabel.setText("Round Score: " + roundScore);
+        totalScoreLabel.setText("Total Score: " + totalScore);
     }
 
     private HashSet<String> readValidWords() {
@@ -543,9 +567,15 @@ public class PlayerInGameView extends JFrame {
                     ? "No one won this round."
                     : roundWinner + " won this round.";
 
+            if (roundWinner != null && roundWinner.equalsIgnoreCase(currentPlayerUsername)) {
+                playerRoundWins++;
+            }
+
+            boolean shouldEndGame = isGameEnd || playerRoundWins >= Player.getRoundsToWin();
+
             JOptionPane optionPane = new JOptionPane(
                     winnerText + "\nRound score: " + roundScore + "\nTotal score: " + totalScore + "\n\n" +
-                            (isGameEnd ? "Showing final results shortly..." : "Next round starting shortly..."),
+                            (shouldEndGame ? "Showing final results shortly..." : "Next round starting shortly..."),
                     JOptionPane.PLAIN_MESSAGE);
 
             JDialog dialog = optionPane.createDialog("Round Over!");
@@ -554,7 +584,7 @@ public class PlayerInGameView extends JFrame {
 
             Timer closeTimer = new Timer(5000, e -> {
                 dialog.dispose();
-                if (isGameEnd) {
+                if (shouldEndGame) {
                     dispose();
                     new PlayerWinnerView(currentPlayerUsername, totalScore);
                     return;
