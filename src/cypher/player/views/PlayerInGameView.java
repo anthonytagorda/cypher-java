@@ -208,7 +208,7 @@ public class PlayerInGameView extends JFrame {
         scrollPane.setOpaque(false);
         scrollPane.getViewport().setOpaque(false);
         scrollPane.setBorder(null);
-        scrollPane.setBounds(10, 150, 200, 400);
+        scrollPane.setBounds(15, 150, 200, 400);
         background.add(scrollPane);
 
         // ── Word input ───────────────────────────────────────────────
