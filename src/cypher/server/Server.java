@@ -2,7 +2,7 @@ package cypher.server;
 
 import cypher.server.app.ServerApp;
 import cypher.server.app.ServerAppHelper;
-import cypher.server.views.ServerLauncherView;
+import cypher.server.views.ServerDashboardView;
 import org.omg.CORBA.ORB;
 import org.omg.CORBA.ORBPackage.InvalidName;
 import org.omg.CORBA.Object;
@@ -39,7 +39,7 @@ public class Server {
 
     public static void main(String[] args) {
         startupArgs = (args == null) ? new String[0] : args;  // Preserve args so Start button flow can reuse JVM run-config arguments.
-        new ServerLauncherView(); // Launch Swing dashboard (actual server starts only on button click)
+        new ServerDashboardView(); // Launch Swing dashboard (actual server starts only on button click)
     }
 
     public static synchronized void startServer() {
