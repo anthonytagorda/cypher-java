@@ -236,7 +236,7 @@ public class ServerManageGameView extends JFrame {
         Map<String, Integer> settings = CypherDB.getGameSettings();
 
         int currentWaitTime = settings.getOrDefault("waiting_time_sec", 30);
-        int currentDuration = settings.getOrDefault("game_duration_sec", 180);
+        int currentDuration = settings.getOrDefault("game_duration_sec", 60);
         int currentMaxPlayers = settings.getOrDefault("max_players", 2);
         int currentRoundsToWin = settings.getOrDefault("rounds_to_win", 3);
 

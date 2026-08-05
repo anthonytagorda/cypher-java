@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS games (
     CONSTRAINT fk_games_winner_username
     FOREIGN KEY (player_winner) REFERENCES players(username)
     ON DELETE SET NULL ON UPDATE CASCADE
-    );
+);
 
 -- players inside a game
 CREATE TABLE IF NOT EXISTS game_players (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS game_players (
     CONSTRAINT fk_game_players_player
         FOREIGN KEY (player_id) REFERENCES players(player_id)
         ON DELETE CASCADE ON UPDATE CASCADE
-    );
+);
 
 -- =========================
 -- ROUNDS
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS rounds (
     CONSTRAINT fk_rounds_winner
         FOREIGN KEY (winner_player_id) REFERENCES players(player_id)
         ON DELETE SET NULL ON UPDATE CASCADE
-    );
+);
 
 -- =========================
 -- WORD SUBMISSIONS
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS word_submissions (
     INDEX idx_ws_game_round (game_id, round_id),
     INDEX idx_ws_player (player_id),
     INDEX idx_ws_word (word)
-    );
+);
 
 -- =========================
 -- LEADERBOARD (GLOBAL STATS)
@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS leaderboard (
     CONSTRAINT fk_leaderboard_player
         FOREIGN KEY (player_id) REFERENCES players(player_id)
         ON DELETE CASCADE ON UPDATE CASCADE
-    );
+);
 
 -- =========================
 -- SETTINGS
@@ -125,10 +125,10 @@ CREATE TABLE IF NOT EXISTS leaderboard (
 CREATE TABLE settings (
     id                INT PRIMARY KEY,
     waiting_time_sec  INT NOT NULL DEFAULT 30,
-    game_duration_sec INT NOT NULL DEFAULT 180,
+    game_duration_sec INT NOT NULL DEFAULT 60,
     max_players       INT NOT NULL DEFAULT 2,
     rounds_to_win     INT NOT NULL DEFAULT 3
 );
 
 INSERT INTO settings (id, waiting_time_sec, game_duration_sec, max_players, rounds_to_win)
-VALUES (1, 30, 180, 2, 3);
+VALUES (1, 30, 60, 2, 3);
