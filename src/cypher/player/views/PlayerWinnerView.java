@@ -34,7 +34,7 @@ public class PlayerWinnerView extends JFrame {
         JLabel background = new JLabel(gifBackground) {
             @Override
             protected void paintComponent(Graphics g) {
-                g.drawImage(gifBackground.getImage(), 0, 0, 500,640,this);
+                g.drawImage(gifBackground.getImage(), 0, 0, 500,500,this);
             }
         };
         background.setLayout(new BorderLayout());
