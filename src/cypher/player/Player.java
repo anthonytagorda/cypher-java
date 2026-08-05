@@ -15,6 +15,7 @@ import org.omg.PortableServer.POA;
 import org.omg.PortableServer.POAHelper;
 
 import javax.swing.*;
+import java.awt.*;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,20 +31,24 @@ public class Player {
     private static String playerUsername;
     private static boolean isHost = false;
     private static boolean singlePlayerMode = false;
+    private static Timer serverWatchTimer;
 
     public static void main(String[] args) {
-        try {
-            connect();
-            SwingUtilities.invokeLater(PlayerLoginView::new);
-        } catch (Exception e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(
-                    null,
-                    "Server is offline.\n" + e.getClass().getSimpleName(),
-                    "Player Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-        }
+        SwingUtilities.invokeLater(() -> {
+            try {
+                connect();
+                new PlayerLoginView();
+            } catch (Exception e) {
+                System.err.println("Initial connection failed: " + e.getMessage());
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Could not connect to the server. The application will now close.",
+                        "Connection Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                System.exit(1);
+            }
+        });
     }
 
     private static void connect() throws Exception {
@@ -57,6 +62,9 @@ public class Player {
         org.omg.CORBA.Object nsObj = orb.resolve_initial_references("NameService");
         NamingContextExt nc = NamingContextExtHelper.narrow(nsObj);
         server = ServerAppHelper.narrow(nc.resolve_str(CYPHER));
+
+        // Start server watcher after successful connection
+        startServerWatcher();
     }
 
     private static Properties loadConfig() throws Exception {
@@ -83,6 +91,9 @@ public class Player {
 
     public static int login(String username, String password) {
         try {
+            if (server == null) {
+                connect();
+            }
             PlayerApp callback = createCallback(username);
             playerId = server.login(username, password, callback);
             playerUsername = username;
@@ -103,6 +114,9 @@ public class Player {
 
     public static boolean register(String username, String password) {
         try {
+            if (server == null) {
+                connect();
+            }
             return server.register(username, password);
         } catch (org.omg.CORBA.COMM_FAILURE e) {
             System.out.println("[CLIENT] COMM_FAILURE during register");
@@ -116,10 +130,12 @@ public class Player {
 
     public static void logout() {
         try {
-            server.logout(playerId);
-            SwingUtilities.invokeLater(PlayerLoginView::new);
-        } catch (Exception e) {
-            serverOfflineExit();
+            if (server != null) {
+                server.logout(playerId);
+            }
+        } catch (Exception ignored) {
+        } finally {
+            disposeAndExit();
         }
     }
 
@@ -128,7 +144,18 @@ public class Player {
     }
 
     public static ArrayList<Leaderboards> getLeaderboards() {
-        return new ArrayList<>(Arrays.asList(server.getLeaderboard()));
+        try {
+            if (server == null) {
+                connect();
+            }
+            return new ArrayList<>(Arrays.asList(server.getLeaderboard()));
+        } catch (org.omg.CORBA.COMM_FAILURE e) {
+            serverOfflineExit();
+            return new ArrayList<>();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
     }
 
     private static PlayerApp createCallback(String username) {
@@ -159,12 +186,32 @@ public class Player {
     }
 
     private static void serverOfflineExit() {
-        JOptionPane.showMessageDialog(
-                null,
-                "The server is offline. Please try again later.",
-                "Error",
-                JOptionPane.ERROR_MESSAGE
-        );
+        SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "The server is offline. The application will now close.",
+                    "Server Offline",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            disposeAndExit();
+        });
+    }
+
+    public static void disposeAndExit() {
+        if (serverWatchTimer != null) {
+            serverWatchTimer.stop();
+        }
+
+        clearLocalGameState();
+        playerId = -1;
+        playerUsername = null;
+        server = null;
+
+        // Close all open windows
+        for (Window window : Window.getWindows()) {
+            window.dispose();
+        }
+
         System.exit(0);
     }
 
@@ -189,27 +236,35 @@ public class Player {
         }
     }
 
+    public static GameConfig getGameConfig() {
+        try {
+            if (server == null) {
+                connect();
+            }
+            return server.getGameConfig();
+        } catch (org.omg.CORBA.COMM_FAILURE e) {
+            serverOfflineExit();
+            return new GameConfig(30, 180, 2, 3);
+        } catch (Exception e) {
+            return new GameConfig(30, 180, 2, 3);
+        }
+    }
+
     public static int getWaitingTime() {
         if (currentGame == null || currentGame.startTime == null) return -999;
 
-        GameConfig cfg;
-        try {
-            cfg = server.getGameConfig();
-        } catch (Exception e) {
-            return -999;
-        }
+        GameConfig cfg = getGameConfig();
 
         long diffMs = System.currentTimeMillis() - java.sql.Timestamp.valueOf(currentGame.startTime).getTime();
         return cfg.waitingTimeSecs - (int) (diffMs / 1000);
     }
 
-    public static boolean hasOpponentJoined() {
-        try {
-            return server.hasOpponentJoined(playerId);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
+    public static int getRoundDurationSeconds() {
+        return getGameConfig().roundDurationSecs;
+    }
+
+    public static int getRoundsToWin() {
+        return getGameConfig().roundsToWin;
     }
 
     public static void submitWord(String word) {
@@ -221,6 +276,7 @@ public class Player {
 
         try {
             // Only call server when the game exists on the server (gameId>0).
+            //noinspection StatementWithEmptyBody
             if (currentGame.gameId > 0) {
                 server.submitWord(playerId, currentGame.gameId, word);
             } else {
@@ -290,5 +346,27 @@ public class Player {
             clearLocalGameState();
             System.exit(0);
         }
+    }
+
+    private static void startServerWatcher() {
+        if (serverWatchTimer != null && serverWatchTimer.isRunning()) {
+            return; // Already running
+        }
+
+        serverWatchTimer = new Timer(500, e -> {
+            try {
+                // Ping server by calling a lightweight method
+                // Only ping if not in singleplayer mode
+                if (!singlePlayerMode && server != null) {
+                    server.getGameConfig();
+                }
+            } catch (org.omg.CORBA.COMM_FAILURE ex) {
+                ((Timer) e.getSource()).stop();
+                serverOfflineExit();
+            } catch (Exception ex) {
+                // ignore other errors during ping
+            }
+        });
+        serverWatchTimer.start();
     }
 }
