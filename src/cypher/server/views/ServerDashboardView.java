@@ -10,7 +10,7 @@ import java.awt.event.WindowEvent;
 import java.io.OutputStream;
 import java.io.PrintStream;
 
-public class ServerLauncherView extends JFrame {
+public class ServerDashboardView extends JFrame {
     // Logo
     private final ImageIcon logo = new ImageIcon("src/cypher/assets/cypher_logo.png");
 
@@ -20,14 +20,16 @@ public class ServerLauncherView extends JFrame {
 
     // Log
     private JTextArea logText;
+
     // Prevent double-close execution
     private boolean closing = false;
 
-    public ServerLauncherView() {
+    public ServerDashboardView() {
         initComponents();
 
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
+            @SuppressWarnings("finally")
             @Override
             public void windowClosing(WindowEvent e) {
                 if (closing) return;
@@ -108,7 +110,7 @@ public class ServerLauncherView extends JFrame {
 
         /* GRAPHICAL INTERFACE CONFIGURATIONS */
         // Frame Configuration
-        setTitle("Server | Launcher");
+        setTitle("Server | Dashboard");
         setSize(750, 500);
         setResizable(false);
         setLocationRelativeTo(null);
