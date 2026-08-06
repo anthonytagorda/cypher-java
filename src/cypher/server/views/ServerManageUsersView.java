@@ -29,7 +29,7 @@ public class ServerManageUsersView extends JFrame {
     private String activeSearchQuery = "";
 
     // ==================== Constructor & Lifecycle ====================
-    public ServerManageUsersView() {
+    private ServerManageUsersView() {
         initComponents();
         startUserRefreshTimer();
         startServerWatcher();

@@ -84,8 +84,7 @@ public class ServerDashboardView extends JFrame {
                 return;
             }
 
-            ServerManageUsersView view = new ServerManageUsersView();
-            view.setVisible(true);
+            ServerManageUsersView.getInstance().setVisible(true);
         });
 
         // Manage Game Button Function
@@ -95,8 +94,7 @@ public class ServerDashboardView extends JFrame {
                 return;
             }
 
-            ServerManageGameView view = new ServerManageGameView();
-            view.setVisible(true);
+            ServerManageGameView.getInstance().setVisible(true);
         });
 
         // Clear Button Function

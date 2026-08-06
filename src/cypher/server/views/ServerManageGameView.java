@@ -28,7 +28,7 @@ public class ServerManageGameView extends JFrame {
     private String activeSearchQuery = "";
 
     // ==================== Constructor & Lifecycle ====================
-    public ServerManageGameView() {
+    private ServerManageGameView() {
         initComponents();
         startGameRefreshTimer();
         startServerWatcher();
@@ -245,26 +245,40 @@ public class ServerManageGameView extends JFrame {
         JSpinner maxPlayersSpinner = new JSpinner(new SpinnerNumberModel(currentMaxPlayers, 1, 10, 1));
         JSpinner roundsToWinSpinner = new JSpinner(new SpinnerNumberModel(currentRoundsToWin, 1, 10, 1));
 
+        // Enable user input in the spinners
+        ((JSpinner.DefaultEditor) waitingTimeSpinner.getEditor()).getTextField().setEditable(true);
+        ((JSpinner.DefaultEditor) roundDurationSpinner.getEditor()).getTextField().setEditable(true);
+        ((JSpinner.DefaultEditor) maxPlayersSpinner.getEditor()).getTextField().setEditable(true);
+        ((JSpinner.DefaultEditor) roundsToWinSpinner.getEditor()).getTextField().setEditable(true);
+
         JPanel panel = new JPanel(new GridLayout(4, 2, 8, 12));
         panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
         JLabel waitingLabel = new JLabel("Waiting Time (seconds):");
         waitingLabel.setFont(waitingLabel.getFont().deriveFont(Font.BOLD));
+        waitingLabel.setToolTipText("The time players have to join the game before it starts.");
+        waitingTimeSpinner.setToolTipText("The time players have to join the game before it starts.");
         panel.add(waitingLabel);
         panel.add(waitingTimeSpinner);
 
         JLabel durationLabel = new JLabel("Round Duration (seconds):");
         durationLabel.setFont(durationLabel.getFont().deriveFont(Font.BOLD));
+        durationLabel.setToolTipText("How long each round lasts for players to submit words.");
+        roundDurationSpinner.setToolTipText("How long each round lasts for players to submit words.");
         panel.add(durationLabel);
         panel.add(roundDurationSpinner);
 
         JLabel maxPlayersLabel = new JLabel("Max Players per Game:");
         maxPlayersLabel.setFont(maxPlayersLabel.getFont().deriveFont(Font.BOLD));
+        maxPlayersLabel.setToolTipText("Maximum number of players allowed in a single game instance.");
+        maxPlayersSpinner.setToolTipText("Maximum number of players allowed in a single game instance.");
         panel.add(maxPlayersLabel);
         panel.add(maxPlayersSpinner);
 
         JLabel roundsToWinLabel = new JLabel("Rounds Required to Win:");
         roundsToWinLabel.setFont(roundsToWinLabel.getFont().deriveFont(Font.BOLD));
+        roundsToWinLabel.setToolTipText("The number of rounds a player must win to be declared the overall winner.");
+        roundsToWinSpinner.setToolTipText("The number of rounds a player must win to be declared the overall winner.");
         panel.add(roundsToWinLabel);
         panel.add(roundsToWinSpinner);
 
@@ -278,7 +292,28 @@ public class ServerManageGameView extends JFrame {
 
         CypherDB.updateGameSettings(waitTime, duration, maxPlayers, roundsToWin);
 
-        JOptionPane.showMessageDialog(this, "Game settings updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        StringBuilder sb = new StringBuilder();
+        if (waitTime != currentWaitTime) {
+            sb.append(String.format("- Waiting Time (seconds): %d → %d\n", currentWaitTime, waitTime));
+        }
+        if (duration != currentDuration) {
+            sb.append(String.format("- Round Duration (seconds): %d → %d\n", currentDuration, duration));
+        }
+        if (maxPlayers != currentMaxPlayers) {
+            sb.append(String.format("- Max Players per game: %d → %d\n", currentMaxPlayers, maxPlayers));
+        }
+        if (roundsToWin != currentRoundsToWin) {
+            sb.append(String.format("- Rounds Required to Win: %d → %d\n", currentRoundsToWin, roundsToWin));
+        }
+
+        String successMessage;
+        if (sb.length() > 0) {
+            successMessage = "Game settings updated successfully:\n\n" + sb.toString();
+        } else {
+            successMessage = "No changes were made to the game settings.";
+        }
+
+        JOptionPane.showMessageDialog(this, successMessage, "Success", JOptionPane.INFORMATION_MESSAGE);
     }
 
     // ==================== Data & UI Utility Methods ====================
@@ -379,7 +414,7 @@ public class ServerManageGameView extends JFrame {
 
     // ==================== Timer Methods ====================
     private void startGameRefreshTimer() {
-        gameRefreshTimer = new Timer(1000, e -> refreshGamesSafely());
+        gameRefreshTimer = new Timer(5000, e -> refreshGamesSafely());
         gameRefreshTimer.start();
     }
 
