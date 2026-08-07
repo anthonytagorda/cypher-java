@@ -81,6 +81,12 @@ module cypher {
                  */
                 void noPlayersJoined();
 
+                /**
+                 * Informs player that another player has disconnected from the game.
+                 * @param playerName Username of the disconnected player.
+                 */
+                void playerDisconnected(in string playerName);
+
                 //── Admin/System Events ────────────────────────────────────────────
 
                  /**

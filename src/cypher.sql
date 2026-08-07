@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS games (
     game_id          INT AUTO_INCREMENT PRIMARY KEY,
     host_player_id   INT NOT NULL,
     game_type        ENUM('multiplayer','singleplayer') NOT NULL DEFAULT 'multiplayer',
-    status           ENUM('WAITING','IN_PROGRESS','ENDED','CANCELLED') NOT NULL DEFAULT 'WAITING',
+    status           ENUM('WAITING','IN PROGRESS','ENDED','CANCELLED') NOT NULL DEFAULT 'WAITING',
     started_at       DATETIME NULL,
     ended_at         DATETIME NULL,
     player_winner    VARCHAR(50) NULL,
