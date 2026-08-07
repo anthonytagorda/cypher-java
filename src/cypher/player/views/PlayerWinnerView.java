@@ -20,26 +20,45 @@ public class PlayerWinnerView extends JFrame {
 
     private void initComponents() {
         // Frame Configuration
-        setTitle("Cypher | Winner!");
+        setTitle("Winner!");
         setSize(500, 500);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(false);
 
-        ImageIcon icon = new ImageIcon("src/cypher/assets/cypher_logo.png");
-        setIconImage(icon.getImage());
+        // Window icon (this is the small logo in the title bar)
+        ImageIcon trophy = new ImageIcon("src/cypher/assets/cypher_win.png");
+        setIconImage(trophy.getImage());
 
-        // GIF Background
-        ImageIcon gifBackground = new ImageIcon("src/cypher/assets/cypher_player-win.gif");
-        JLabel background = new JLabel(gifBackground) {
+        // ─── Background Panel (draws the GIF) ──────────────────────
+        JPanel backgroundPanel = new JPanel(null) {
+            private final Image gifImage;
+
+            {
+                // Load the GIF once
+                ImageIcon gifIcon = new ImageIcon("src/cypher/assets/cypher_player-win.gif");
+                gifImage = gifIcon.getImage();
+            }
+
             @Override
             protected void paintComponent(Graphics g) {
-                g.drawImage(gifBackground.getImage(), 0, 0, 500,500,this);
+                super.paintComponent(g);
+                if (gifImage != null) {
+                    // Draw the GIF scaled to fill the panel
+                    g.drawImage(gifImage, 0, 0, getWidth(), getHeight(), this);
+                } else {
+                    // Fallback if GIF is missing
+                    g.setColor(Color.BLACK);
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                    g.setColor(Color.WHITE);
+                    g.drawString("Background not found", 50, 50);
+                }
             }
         };
-        background.setLayout(new BorderLayout());
+        backgroundPanel.setLayout(new BorderLayout());
+        setContentPane(backgroundPanel);
 
-        // Content Panel
+        // ─── Transparent content panel (overlay) ───────────────────
         JPanel contentPanel = new JPanel(new GridBagLayout());
         contentPanel.setOpaque(false);
 
@@ -67,7 +86,7 @@ public class PlayerWinnerView extends JFrame {
             new PlayerMainMenuView(winnerName);
         });
 
-        // Layout Constraints for Winner and Score
+        // Layout
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridwidth = GridBagConstraints.REMAINDER;
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -76,18 +95,16 @@ public class PlayerWinnerView extends JFrame {
         contentPanel.add(winnerLabel, gbc);
         contentPanel.add(scoreLabel, gbc);
 
-        // Layout Constraints for Return Button (positioned at bottom)
         gbc = new GridBagConstraints();
         gbc.anchor = GridBagConstraints.SOUTH;
         gbc.insets = new Insets(240, 0, 30, 0);
-
         contentPanel.add(returnButton, gbc);
-        background.add(contentPanel, BorderLayout.CENTER);
-        setContentPane(background);
+
+        // Add overlay to background
+        backgroundPanel.add(contentPanel, BorderLayout.CENTER);
     }
 
     private void startAutoCloseTimer() {
-        // Auto-close after 30 seconds (30000 ms)
         timer = new Timer(30000, e -> {
             dispose();
             new PlayerMainMenuView(winnerName);
