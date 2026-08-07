@@ -62,8 +62,8 @@ public class PlayerLoginView extends JFrame {
         });
 
         // Layout
-        usernameLabel.setBounds(80, 210, 120, 25);
-        passwordLabel.setBounds(80, 250, 120, 25);
+        usernameLabel.setBounds(80, 190, 120, 25);
+        passwordLabel.setBounds(80, 230, 120, 25);
 
         usernameLabel.setFont(FontLoader.loadFont(10f));
         passwordLabel.setFont(FontLoader.loadFont(10f));
@@ -71,7 +71,7 @@ public class PlayerLoginView extends JFrame {
         usernameLabel.setForeground(Color.WHITE);
         passwordLabel.setForeground(Color.WHITE);
 
-        loginButton.setBounds(150, 300, 120, 40);
+        loginButton.setBounds(150, 290, 120, 40);
         loginButton.setFont(FontLoader.loadFont(12f));
 
         signUpLabel.setFont(FontLoader.loadFont(9f));
@@ -79,9 +79,9 @@ public class PlayerLoginView extends JFrame {
         signUpLabel.setBounds(65, 335, 300, 70);
         signUpLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        usernameField.setBounds(210, 210, 120, 25);
+        usernameField.setBounds(180, 190, 150, 25);
         usernameField.setFont(FontLoader.loadFont(10f));
-        passwordField.setBounds(210, 250, 120, 25);
+        passwordField.setBounds(180, 230, 150, 25);
 
         imageLabel.setBounds(-250, -40, 900, 300);
 
