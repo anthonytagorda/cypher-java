@@ -294,21 +294,21 @@ public class ServerManageGameView extends JFrame {
 
         StringBuilder sb = new StringBuilder();
         if (waitTime != currentWaitTime) {
-            sb.append(String.format("- Waiting Time (seconds): %d → %d\n", currentWaitTime, waitTime));
+            sb.append(String.format("Waiting Time (seconds): %d → %d\n", currentWaitTime, waitTime));
         }
         if (duration != currentDuration) {
-            sb.append(String.format("- Round Duration (seconds): %d → %d\n", currentDuration, duration));
+            sb.append(String.format("Round Duration (seconds): %d → %d\n", currentDuration, duration));
         }
         if (maxPlayers != currentMaxPlayers) {
-            sb.append(String.format("- Max Players per game: %d → %d\n", currentMaxPlayers, maxPlayers));
+            sb.append(String.format("Max Players per game: %d → %d\n", currentMaxPlayers, maxPlayers));
         }
         if (roundsToWin != currentRoundsToWin) {
-            sb.append(String.format("- Rounds Required to Win: %d → %d\n", currentRoundsToWin, roundsToWin));
+            sb.append(String.format("Rounds Required to Win: %d → %d\n", currentRoundsToWin, roundsToWin));
         }
 
         String successMessage;
         if (sb.length() > 0) {
-            successMessage = "Game settings updated successfully:\n\n" + sb.toString();
+            successMessage = "Game settings updated successfully:\n\n" + sb;
         } else {
             successMessage = "No changes were made to the game settings.";
         }
@@ -465,7 +465,7 @@ public class ServerManageGameView extends JFrame {
                 case "waiting":
                     c.setBackground(Color.decode("#FFFACD"));
                     break;
-                case "in_progress":
+                case "in progress":
                     c.setBackground(Color.decode("#FFE0B2"));
                     break;
                 case "ended":
