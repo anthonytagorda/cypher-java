@@ -34,6 +34,7 @@ public class PlayerImpl extends PlayerAppPOA {
                 inGameView = new PlayerInGameView();
             }
             inGameView.setVisible(true);
+            Player.setCurrentGameStatus("IN PROGRESS");
             inGameView.generateGameBoard(letters);
         });
     }

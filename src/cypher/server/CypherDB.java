@@ -1,6 +1,7 @@
 package cypher.server;
 
 import cypher.server.tables.game.Game;
+import cypher.server.tables.leaderboard.Leaderboards;
 import cypher.server.tables.player.Player;
 
 import java.sql.*;
@@ -296,7 +297,6 @@ public class CypherDB {
         String query = "UPDATE players SET status = 'offline'";
         try (PreparedStatement ps = getConnection().prepareStatement(query)) {
             int count = ps.executeUpdate();
-            System.out.println("Logged out all players (" + count + ").");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -631,6 +631,8 @@ public class CypherDB {
             winner = "TIE";
         }
 
+        updateLeaderboardAfterGame(gameId, winner);
+
         String update = "UPDATE games SET ended_at = now(), status = 'ENDED', player_winner = ? WHERE game_id = ?";
         try (PreparedStatement ps = getConnection().prepareStatement(update)) {
             ps.setString(1, "TIE".equals(winner) ? null : winner);
@@ -665,6 +667,110 @@ public class CypherDB {
             e.printStackTrace();
         }
         return winner;
+    }
+
+    // =========================
+    // Leaderboard Queries
+    // =========================
+    public static List<Leaderboards> getLeaderboard() {
+        List<Leaderboards> entries = new ArrayList<>();
+        boolean hasLongestWord = hasLongestWordColumn();
+        String longestWordSelect = hasLongestWord ? "COALESCE(lb.longest_word, '')" : "''";
+
+        String query = "SELECT p.username, lb.games_played, lb.games_won, lb.total_score, "
+                + longestWordSelect + " AS longest_word "
+                + "FROM leaderboard lb "
+                + "JOIN players p ON lb.player_id = p.player_id "
+                + "WHERE lb.games_played > 0 OR lb.games_won > 0 OR lb.total_score > 0 "
+                + "ORDER BY lb.games_won DESC, lb.total_score DESC, p.username ASC "
+                + "LIMIT 50";
+
+        try (Statement stmt = getConnection().createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            int rank = 1;
+            while (rs.next()) {
+                Leaderboards entry = new Leaderboards();
+                entry.rank = rank++;
+                entry.username = rs.getString("username");
+                entry.gamesPlayed = rs.getInt("games_played");
+                entry.gamesWon = rs.getInt("games_won");
+                entry.highestScore = rs.getInt("total_score");
+                String word = rs.getString("longest_word");
+                entry.longestWord = (word == null || word.isEmpty()) ? "-" : word;
+                entries.add(entry);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return entries;
+    }
+
+    private static void ensureLeaderboardEntry(int playerId) {
+        String query = "INSERT IGNORE INTO leaderboard (player_id) VALUES (?)";
+        try (PreparedStatement ps = getConnection().prepareStatement(query)) {
+            ps.setInt(1, playerId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void updateLeaderboardAfterGame(int gameId, String winnerUsername) {
+        List<Map<String, Object>> stats = getGamePlayersStats(gameId);
+        for (Map<String, Object> m : stats) {
+            int playerId = ((Number) m.get("player_id")).intValue();
+            int gameScore = ((Number) m.get("total_score")).intValue();
+            String username = (String) m.get("username");
+            boolean won = winnerUsername != null
+                    && !winnerUsername.isEmpty()
+                    && !"TIE".equalsIgnoreCase(winnerUsername)
+                    && username.equalsIgnoreCase(winnerUsername);
+
+            ensureLeaderboardEntry(playerId);
+            String update = "UPDATE leaderboard SET games_played = games_played + 1, "
+                    + "games_won = games_won + ?, "
+                    + "total_score = GREATEST(total_score, ?) "
+                    + "WHERE player_id = ?";
+            try (PreparedStatement ps = getConnection().prepareStatement(update)) {
+                ps.setInt(1, won ? 1 : 0);
+                ps.setInt(2, gameScore);
+                ps.setInt(3, playerId);
+                ps.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void updateLeaderboardLongestWord(int playerId, String word) {
+        if (word == null || word.isEmpty() || !hasLongestWordColumn()) {
+            return;
+        }
+
+        word = word.trim().toLowerCase();
+        ensureLeaderboardEntry(playerId);
+
+        String update = "UPDATE leaderboard SET longest_word = ? "
+                + "WHERE player_id = ? AND (longest_word IS NULL OR longest_word = '' OR CHAR_LENGTH(longest_word) < ?)";
+        try (PreparedStatement ps = getConnection().prepareStatement(update)) {
+            ps.setString(1, word);
+            ps.setInt(2, playerId);
+            ps.setInt(3, word.length());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static boolean hasLongestWordColumn() {
+        String query = "SELECT COUNT(*) AS cnt FROM information_schema.columns "
+                + "WHERE table_schema = database() AND table_name = 'leaderboard' AND column_name = 'longest_word'";
+        try (Statement stmt = getConnection().createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            return rs.next() && rs.getInt("cnt") > 0;
+        } catch (SQLException e) {
+            return false;
+        }
     }
 
     // =========================

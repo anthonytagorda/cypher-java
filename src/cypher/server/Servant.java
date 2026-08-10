@@ -506,6 +506,8 @@ public class Servant extends ServerAppPOA {
                 throw e;
             }
 
+            CypherDB.updateLeaderboardLongestWord(playerId, word);
+
             // notify the submitting player that word was accepted
             PlayerApp app = clients.get(playerId);
             if (app != null) {
@@ -596,7 +598,8 @@ public class Servant extends ServerAppPOA {
 
     @Override
     public Leaderboards[] getLeaderboard() {
-        return new Leaderboards[0];
+        List<Leaderboards> entries = CypherDB.getLeaderboard();
+        return entries.toArray(new Leaderboards[0]);
     }
 
     @Override

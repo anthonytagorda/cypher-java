@@ -177,8 +177,7 @@ public class PlayerMainMenuView extends JFrame {
         leaderboardsButton.setFont(new Font("PressStart2P", Font.BOLD, 18));
         leaderboardsButton.setBounds(350, 300, 240, 50);
         leaderboardsButton.addActionListener(e -> {
-            PlayerLeaderboardsView leaderboardsView = new PlayerLeaderboardsView();
-            leaderboardsView.setVisible(true);
+            PlayerLeaderboardsView.showLeaderboard();
         });
         return leaderboardsButton;
     }

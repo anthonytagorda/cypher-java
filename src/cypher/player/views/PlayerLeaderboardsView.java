@@ -11,16 +11,31 @@ import java.awt.*;
 import java.util.ArrayList;
 
 public class PlayerLeaderboardsView extends JFrame {
-
+    private static PlayerLeaderboardsView currentInstance = null;
     private DefaultTableModel tableModel;
 
-    public PlayerLeaderboardsView() {
+    public static void showLeaderboard() {
+        if (currentInstance != null && currentInstance.isVisible()) {
+            currentInstance.toFront();
+            currentInstance.requestFocus();
+            return;
+        }
+        currentInstance = new PlayerLeaderboardsView();
+        currentInstance.setVisible(true);
+    }
+
+    private PlayerLeaderboardsView() {
         initComponents();
         loadLeaderboards();
     }
 
-    private void initComponents() {
+    @Override
+    public void dispose() {
+        currentInstance = null;
+        super.dispose();
+    }
 
+    private void initComponents() {
         setTitle("Cypher | Leaderboards");
         setSize(960, 540);
         setResizable(false);
@@ -70,13 +85,11 @@ public class PlayerLeaderboardsView extends JFrame {
         backButton.setBounds(60, 90, 120, 38);
 
         backButton.setFocusable(false);
-        backButton.setBackground(new Color(56, 81, 214));
+        backButton.setBackground(new Color(236, 6, 212));
         backButton.setForeground(Color.WHITE);
         backButton.setFont(FontLoader.loadFont(14f));
 
-        backButton.addActionListener(e -> {
-            dispose();
-        });
+        backButton.addActionListener(e -> dispose());
 
         //----------------------------------------
         // Table
@@ -102,12 +115,12 @@ public class PlayerLeaderboardsView extends JFrame {
 
         leaderboardTable.setRowHeight(32);
         leaderboardTable.setFont(new Font("Arial", Font.PLAIN, 14));
-        leaderboardTable.getTableHeader().setFont(new Font("Arial", Font.BOLD, 14));
+        leaderboardTable.getTableHeader().setFont(new Font("Roboto", Font.BOLD, 14));
 
-        leaderboardTable.getTableHeader().setBackground(new Color(33, 47, 107));
+        leaderboardTable.getTableHeader().setBackground(new Color(32, 1, 75));
         leaderboardTable.getTableHeader().setForeground(Color.WHITE);
 
-        leaderboardTable.setBackground(new Color(30, 30, 30));
+        leaderboardTable.setBackground(new Color(4, 0, 7));
         leaderboardTable.setForeground(Color.WHITE);
 
         leaderboardTable.setGridColor(new Color(60, 60, 60));
@@ -118,13 +131,17 @@ public class PlayerLeaderboardsView extends JFrame {
 
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+        centerRenderer.setForeground(Color.WHITE);
+        centerRenderer.setOpaque(false);
 
-        leaderboardTable.getColumnModel().getColumn(0).setCellRenderer(centerRenderer);
-        leaderboardTable.getColumnModel().getColumn(1).setCellRenderer(centerRenderer);
-        leaderboardTable.getColumnModel().getColumn(2).setCellRenderer(centerRenderer);
-        leaderboardTable.getColumnModel().getColumn(3).setCellRenderer(centerRenderer);
+        for (int i = 0; i < leaderboardTable.getColumnCount(); i++) {
+            leaderboardTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        }
 
         JScrollPane tableScrollPane = new JScrollPane(leaderboardTable);
+        tableScrollPane.setOpaque(false);
+        tableScrollPane.getViewport().setOpaque(false);
+        tableScrollPane.getViewport().setBackground(new Color(4, 0, 7));
         tableScrollPane.setBounds(210, 90, 680, 340);
 
         //----------------------------------------
@@ -156,6 +173,17 @@ public class PlayerLeaderboardsView extends JFrame {
                     leaderboard.longestWord
             });
 
+        }
+
+        if (leaderboards.isEmpty()) {
+            tableModel.addRow(new Object[]{
+                    "-",
+                    "No entries yet",
+                    "-",
+                    "-",
+                    "-",
+                    "-"
+            });
         }
     }
 }

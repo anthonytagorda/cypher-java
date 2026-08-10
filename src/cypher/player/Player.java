@@ -359,6 +359,12 @@ public class Player {
         singlePlayerMode = false;
     }
 
+    public static void setCurrentGameStatus(String status) {
+        if (currentGame != null) {
+            currentGame.gameStatus = status;
+        }
+    }
+
     public static void setSinglePlayerMode(boolean single) {
         singlePlayerMode = single;
     }
