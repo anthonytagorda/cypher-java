@@ -1,9 +1,7 @@
 package cypher.player;
 
 import cypher.player.app.PlayerAppPOA;
-import cypher.player.views.PlayerInGameView;
-import cypher.player.views.PlayerLoaderView;
-import cypher.player.views.PlayerMainMenuView;
+import cypher.player.views.*;
 
 import javax.swing.*;
 import java.util.Arrays;
@@ -22,7 +20,7 @@ public class PlayerImpl extends PlayerAppPOA {
         SwingUtilities.invokeLater(() -> {
             try {
                 // dispose lobby if open
-                cypher.player.views.PlayerLobbyView lobby = cypher.player.views.PlayerLobbyView.getInstance();
+                PlayerLobbyView lobby = PlayerLobbyView.getInstance();
                 if (lobby != null) {
                     try {
                         lobby.dispose();
@@ -80,10 +78,10 @@ public class PlayerImpl extends PlayerAppPOA {
                                               gameWinner.toUpperCase() + " won the game!",
                                               "Game Over",
                                               JOptionPane.INFORMATION_MESSAGE);
-                new cypher.player.views.PlayerWinnerView(gameWinner, 0);
+                new PlayerWinnerView(gameWinner, 0);
             }
             // Clear local game state after presenting final server result
-            cypher.player.Player.clearLocalGameState();
+            Player.clearLocalGameState();
         });
     }
 
@@ -94,11 +92,9 @@ public class PlayerImpl extends PlayerAppPOA {
 
     @Override
     public void gameFound(int gameId, String[] opponents) {
-        System.out.println("Game found: " + gameId + " opponents=" + Arrays.toString(opponents));
-
         SwingUtilities.invokeLater(() -> {
             try {
-                cypher.player.views.PlayerLobbyView lobby = cypher.player.views.PlayerLobbyView.getInstance();
+                PlayerLobbyView lobby = PlayerLobbyView.getInstance();
                 if (lobby != null) {
                     lobby.onOpponentsJoined(opponents);
                 } else {
@@ -112,13 +108,7 @@ public class PlayerImpl extends PlayerAppPOA {
 
     @Override
     public void noPlayersJoined() {
-        SwingUtilities.invokeLater(() -> {
-            JOptionPane.showMessageDialog(null,
-                                          "No other players joined your game. Please start another game",
-                                          "Game Cancelled",
-                                          JOptionPane.WARNING_MESSAGE);
-            new PlayerMainMenuView(playerUsername);
-        });
+        SwingUtilities.invokeLater(() -> PlayerMainMenuView.open(playerUsername));
     }
 
     @Override
@@ -138,5 +128,51 @@ public class PlayerImpl extends PlayerAppPOA {
     public void notifyGameStopped() {
         SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Game stopped by server.", "Stopped", JOptionPane.INFORMATION_MESSAGE));
         new PlayerLoaderView();
+    }
+
+    @Override
+    public void playerDisconnected(String playerName) {
+        SwingUtilities.invokeLater(() -> {
+            String message;
+            boolean returnToMenu = false;
+
+            if (playerName == null || playerName.trim().isEmpty()) {
+                message = "A player has disconnected from the game.";
+            } else if (playerName.startsWith("HOST_LEFT:")) {
+                String hostName = playerName.substring("HOST_LEFT:".length()).trim();
+                message = hostName.isEmpty() ? "The host left the game." : hostName + " left the game.";
+                returnToMenu = true;
+            } else if (playerName.startsWith("KICKED_BY_HOST:")) {
+                String hostName = playerName.substring("KICKED_BY_HOST:".length()).trim();
+                message = hostName.isEmpty() ? "You were kicked from the game." : "You were kicked by " + hostName + ".";
+                returnToMenu = true;
+            } else {
+                message = playerName + " has disconnected from the game.";
+            }
+
+            JOptionPane.showMessageDialog(null,
+                                          message,
+                                          "Player Disconnected",
+                                          JOptionPane.WARNING_MESSAGE);
+
+            if (returnToMenu) {
+                Player.clearLocalGameState();
+                PlayerLobbyView lobby = PlayerLobbyView.getInstance();
+                if (lobby != null) {
+                    try {
+                        lobby.dispose();
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (inGameView != null) {
+                    try {
+                        inGameView.dispose();
+                    } catch (Exception ignored) {
+                    }
+                    inGameView = null;
+                }
+                PlayerMainMenuView.open(playerUsername);
+            }
+        });
     }
 }

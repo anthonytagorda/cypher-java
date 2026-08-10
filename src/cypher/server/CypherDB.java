@@ -338,23 +338,45 @@ public class CypherDB {
     }
 
     public static Game findNewGame(int playerId) {
-        String query = "SELECT game_id, created_at, status FROM games WHERE status = ? ORDER BY game_id";
-        Game g = new Game();
-        g.gameId = 0;
-        g.startTime = "";
-        g.endTime = "";
-        g.gameStatus = "";
-        g.playerWinner = "";
-
+        // First check if this player is already hosting a game
+        String checkHostQuery = "SELECT game_id FROM games WHERE host_player_id = ? AND status = 'WAITING'";
         try {
             Connection conn = getConnection();
+            try (PreparedStatement psCheck = conn.prepareStatement(checkHostQuery)) {
+                psCheck.setInt(1, playerId);
+                try (ResultSet rsCheck = psCheck.executeQuery()) {
+                    if (rsCheck.next()) {
+                        // Player is already hosting a game, don't join another
+                        Game g = new Game();
+                        g.gameId = 0;
+                        g.startTime = "";
+                        g.endTime = "";
+                        g.gameStatus = "";
+                        g.playerWinner = "";
+                        return g;
+                    }
+                }
+            }
+
+            String query = "SELECT g.game_id, g.created_at, g.status FROM games g " +
+                    "JOIN players p ON g.host_player_id = p.player_id " +
+                    "WHERE g.status = ? AND p.status = 'online' AND g.host_player_id != ? " +
+                    "ORDER BY g.game_id";
+            Game g = new Game();
+            g.gameId = 0;
+            g.startTime = "";
+            g.endTime = "";
+            g.gameStatus = "";
+            g.playerWinner = "";
+
             try (PreparedStatement ps = conn.prepareStatement(query)) {
                 ps.setString(1, "WAITING");
+                ps.setInt(2, playerId);
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         g.gameId = rs.getInt("game_id");
                         g.startTime = String.valueOf(rs.getTimestamp("created_at"));
-                        g.gameStatus = rs.getString("status");
+                        g.gameStatus = "WAITING";
                         addPlayerToGame(g.gameId, playerId, false);
                     }
                     return g;
@@ -363,26 +385,57 @@ public class CypherDB {
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        Game g = new Game();
+        g.gameId = 0;
+        g.startTime = "";
+        g.endTime = "";
+        g.gameStatus = "";
+        g.playerWinner = "";
         return g;
     }
 
     private static void addPlayerToGame(int gameId, int playerId, boolean isHost) {
-        String query = "INSERT IGNORE INTO game_players(game_id, player_id, is_host) VALUES (?, ?, ?)";
+        String statusCheck = "SELECT status FROM players WHERE player_id = ?";
         try {
             Connection conn = getConnection();
+            try (PreparedStatement psStatusCheck = conn.prepareStatement(statusCheck)) {
+                psStatusCheck.setInt(1, playerId);
+                try (ResultSet rs = psStatusCheck.executeQuery()) {
+                    if (rs.next()) {
+                        String status = rs.getString("status");
+                        if (!"online".equalsIgnoreCase(status) && !isHost) {
+                            return;
+                        }
+                    }
+                }
+            }
+
+            String query = "INSERT IGNORE INTO game_players(game_id, player_id, is_host) VALUES (?, ?, ?)";
             try (PreparedStatement ps = conn.prepareStatement(query)) {
                 ps.setInt(1, gameId);
                 ps.setInt(2, playerId);
                 ps.setInt(3, isHost ? 1 : 0);
                 ps.execute();
-                System.out.println("Player " + playerId + " joined Game " + gameId + ".");
-            }
+                Player p = getPlayerFromId(playerId);
+                String playerName = (p != null && p.username != null) ? p.username : "unknown";
 
-            // Entering any game (host or join) should mark the player as in-game immediately.
-            String setInGame = "UPDATE players SET status = 'in-game' WHERE player_id = ?";
-            try (PreparedStatement psStatus = conn.prepareStatement(setInGame)) {
-                psStatus.setInt(1, playerId);
-                psStatus.executeUpdate();
+                if (isHost) {
+                    System.out.println("Player " + playerName + " hosted Game " + gameId + ".");
+                } else {
+                    // Get host username for joiner players
+                    String hostQuery = "SELECT host_player_id FROM games WHERE game_id = ?";
+                    try (PreparedStatement psHost = conn.prepareStatement(hostQuery)) {
+                        psHost.setInt(1, gameId);
+                        try (ResultSet rsHost = psHost.executeQuery()) {
+                            if (rsHost.next()) {
+                                int hostId = rsHost.getInt("host_player_id");
+                                Player host = getPlayerFromId(hostId);
+                                String hostName = (host != null && host.username != null) ? host.username : "unknown";
+                                System.out.println("Player " + playerName + " joined Game " + gameId + " (Host: " + hostName + ").");
+                            }
+                        }
+                    }
+                }
             }
 
             // After adding a player, check how many players are in the game. If two or more, mark game as started.
@@ -409,13 +462,13 @@ public class CypherDB {
     }
 
     public static List<Player> getPlayersInGame(int gameId) {
-        List<Player> players = new java.util.ArrayList<>();
+        List<Player> players = new ArrayList<>();
         String query = "SELECT p.player_id, p.username, p.password, p.status, p.is_banned, p.total_wins, p.created_at FROM players p JOIN game_players gp ON p.player_id = gp.player_id WHERE gp.game_id = ? ORDER BY gp.joined_at";
         try (PreparedStatement ps = getConnection().prepareStatement(query)) {
             ps.setInt(1, gameId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    players.add(new cypher.server.tables.player.Player(
+                    players.add(new Player(
                             rs.getInt("player_id"),
                             rs.getString("username"),
                             rs.getString("password"),
@@ -433,13 +486,13 @@ public class CypherDB {
     }
 
     public static void startGame(int gameId) {
-        String update = "UPDATE games SET started_at = now(), status = 'IN_PROGRESS', rounds_played = rounds_played + 1 WHERE game_id = ?";
+        String update = "UPDATE games SET started_at = now(), status = 'IN PROGRESS', rounds_played = rounds_played + 1 WHERE game_id = ?";
         try (PreparedStatement ps = getConnection().prepareStatement(update)) {
             ps.setInt(1, gameId);
             ps.executeUpdate();
 
-            // Change status of players as "in-game"
-            String playersUpdate = "UPDATE players p JOIN game_players gp ON p.player_id = gp.player_id SET p.status = 'in-game' WHERE gp.game_id = ?";
+            // Change status of players as "in-game" only if they are currently online
+            String playersUpdate = "UPDATE players p JOIN game_players gp ON p.player_id = gp.player_id SET p.status = 'in-game' WHERE gp.game_id = ? AND p.status = 'online'";
             try (PreparedStatement ps2 = getConnection().prepareStatement(playersUpdate)) {
                 ps2.setInt(1, gameId);
                 ps2.executeUpdate();
@@ -512,6 +565,28 @@ public class CypherDB {
         return false;
     }
 
+    public static List<String> getOpponentsInGame(int gameId, int playerId) {
+        List<String> opponents = new ArrayList<>();
+        String query = "SELECT concat(p.player_id, '|', p.username) AS lobby_entry " +
+                "FROM game_players gp " +
+                "JOIN players p ON gp.player_id = p.player_id " +
+                "JOIN games g ON gp.game_id = g.game_id " +
+                "WHERE gp.game_id = ? AND gp.player_id != ? " +
+                "ORDER BY CASE WHEN p.player_id = g.host_player_id THEN 0 ELSE 1 END, gp.joined_at, p.username";
+        try (PreparedStatement ps = getConnection().prepareStatement(query)) {
+            ps.setInt(1, gameId);
+            ps.setInt(2, playerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    opponents.add(rs.getString("lobby_entry"));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return opponents;
+    }
+
     public static List<Map<String, Object>> getGamePlayersStats(int gameId) {
         List<Map<String, Object>> out = new ArrayList<>();
         String query = "SELECT gp.player_id, p.username, gp.total_score, gp.round_wins FROM game_players gp JOIN players p ON gp.player_id = p.player_id WHERE gp.game_id = ? ORDER BY gp.joined_at";
@@ -536,24 +611,39 @@ public class CypherDB {
     public static String finalizeGameAndGetWinner(int gameId) {
         // compute winner by highest total_score
         String winner = null;
-        int best = Integer.MIN_VALUE;
+        int best = -1;
+        boolean tie = false;
         List<Map<String, Object>> stats = getGamePlayersStats(gameId);
         for (Map<String, Object> m : stats) {
-            int score = (int) m.get("total_score");
+            Object scoreObj = m.get("total_score");
+            int score = (scoreObj instanceof Number) ? ((Number) scoreObj).intValue() : 0;
             if (score > best) {
                 best = score;
                 winner = (String) m.get("username");
-            }
+                tie = false;
+            } else
+                if (score == best && best != -1) {
+                    tie = true;
+                }
+        }
+
+        if (tie) {
+            winner = "TIE";
         }
 
         String update = "UPDATE games SET ended_at = now(), status = 'ENDED', player_winner = ? WHERE game_id = ?";
         try (PreparedStatement ps = getConnection().prepareStatement(update)) {
-            ps.setString(1, winner);
+            ps.setString(1, "TIE".equals(winner) ? null : winner);
             ps.setInt(2, gameId);
             ps.executeUpdate();
 
-            // Change the status of players as "online" again
-            String playersUpdate = "UPDATE players p JOIN game_players gp ON p.player_id = gp.player_id SET p.status = 'online' WHERE gp.game_id = ?";
+            // Delete game if no winner and it's not a tie (or even if tie if that's what user wants)
+            if (winner == null || winner.isEmpty() || "TIE".equals(winner)) {
+                deleteGame(gameId);
+            }
+
+            // Change the status of players as "online" again (if they were in-game)
+            String playersUpdate = "UPDATE players p JOIN game_players gp ON p.player_id = gp.player_id SET p.status = 'online' WHERE gp.game_id = ? AND p.status = 'in-game'";
             try (PreparedStatement ps2 = getConnection().prepareStatement(playersUpdate)) {
                 ps2.setInt(1, gameId);
                 ps2.executeUpdate();
@@ -562,7 +652,7 @@ public class CypherDB {
             }
 
             // if we have a winner, increment their total_wins
-            if (winner != null && !winner.isEmpty()) {
+            if (winner != null && !winner.isEmpty() && !"TIE".equals(winner)) {
                 String incWins = "UPDATE players SET total_wins = total_wins + 1 WHERE username = ?";
                 try (PreparedStatement ps3 = getConnection().prepareStatement(incWins)) {
                     ps3.setString(1, winner);
@@ -588,25 +678,26 @@ public class CypherDB {
                 "g.status, g.rounds_played, COALESCE(g.player_winner, '-') AS player_winner, " +
                 "g.created_at, g.started_at, g.ended_at " +
                 "FROM games g LEFT JOIN players p ON g.host_player_id = p.player_id " +
-                "ORDER BY g.game_id DESC"
+                "ORDER BY g.game_id ASC"
                 : "SELECT g.game_id, COALESCE(p.username, '?') AS host_username, 'multiplayer' AS game_type, " +
                 "g.status, g.rounds_played, COALESCE(g.player_winner, '-') AS player_winner, " +
                 "g.created_at, g.started_at, g.ended_at " +
                 "FROM games g LEFT JOIN players p ON g.host_player_id = p.player_id " +
-                "ORDER BY g.game_id DESC";
+                "ORDER BY g.game_id ASC";
         try (Statement stmt = getConnection().createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+             ResultSet rs = stmt.executeQuery(query)
+        ) {
             while (rs.next()) {
                 Map<String, Object> m = new HashMap<>();
-                m.put("game_id",       rs.getInt("game_id"));
-                m.put("host",          rs.getString("host_username"));
-                m.put("game_type",     rs.getString("game_type"));
-                m.put("status",        rs.getString("status"));
+                m.put("game_id", rs.getInt("game_id"));
+                m.put("host", rs.getString("host_username"));
+                m.put("game_type", rs.getString("game_type"));
+                m.put("status", rs.getString("status"));
                 m.put("rounds_played", rs.getInt("rounds_played"));
-                m.put("winner",        rs.getString("player_winner"));
-                m.put("created_at",    rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toString() : "-");
-                m.put("started_at",    rs.getTimestamp("started_at") != null ? rs.getTimestamp("started_at").toString() : "-");
-                m.put("ended_at",      rs.getTimestamp("ended_at")   != null ? rs.getTimestamp("ended_at").toString()   : "-");
+                m.put("winner", rs.getString("player_winner"));
+                m.put("created_at", rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toString() : "-");
+                m.put("started_at", rs.getTimestamp("started_at") != null ? rs.getTimestamp("started_at").toString() : "-");
+                m.put("ended_at", rs.getTimestamp("ended_at") != null ? rs.getTimestamp("ended_at").toString() : "-");
                 games.add(m);
             }
         } catch (SQLException e) {
@@ -620,6 +711,62 @@ public class CypherDB {
         try (PreparedStatement ps = getConnection().prepareStatement(query)) {
             ps.setInt(1, gameId);
             ps.executeUpdate();
+            resetGameAutoIncrement();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void cancelGame(int gameId) {
+        // Update game status to CANCELLED instead of deleting
+        String updateGame = "UPDATE games SET status = 'CANCELLED', ended_at = now() WHERE game_id = ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(updateGame)) {
+            ps.setInt(1, gameId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        // Delete related game_players
+        String deletePlayers = "DELETE FROM game_players WHERE game_id = ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(deletePlayers)) {
+            ps.setInt(1, gameId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        // Delete the game record
+        String deleteGame = "DELETE FROM games WHERE game_id = ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(deleteGame)) {
+            ps.setInt(1, gameId);
+            int updated = ps.executeUpdate();
+            if (updated > 0) {
+                resetGameAutoIncrement();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void resetGameAutoIncrement() {
+        try {
+            String maxQuery = "SELECT MAX(game_id) AS max_id FROM games";
+            String resetQuery = "ALTER TABLE games AUTO_INCREMENT = ?";
+
+            try (Statement stmt = getConnection().createStatement();
+                 ResultSet rs = stmt.executeQuery(maxQuery)
+            ) {
+                int maxId = 0;
+                if (rs.next()) {
+                    maxId = rs.getInt("max_id");
+                }
+
+                try (PreparedStatement ps = getConnection().prepareStatement(resetQuery)) {
+                    ps.setInt(1, maxId + 1);
+                    ps.executeUpdate();
+                }
+            }
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -640,10 +787,11 @@ public class CypherDB {
     }
 
     private static boolean hasGameTypeColumn() {
-        String query = "SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS " +
-                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'games' AND COLUMN_NAME = 'game_type'";
+        String query = "SELECT COUNT(*) AS cnt FROM information_schema.columns " +
+                "WHERE table_schema = database() AND table_name = 'games' AND column_name = 'game_type'";
         try (Statement stmt = getConnection().createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+             ResultSet rs = stmt.executeQuery(query)
+        ) {
             return rs.next() && rs.getInt("cnt") > 0;
         } catch (SQLException e) {
             return false;
@@ -657,12 +805,13 @@ public class CypherDB {
         Map<String, Integer> settings = new HashMap<>();
         String query = "SELECT waiting_time_sec, game_duration_sec, max_players, rounds_to_win FROM settings WHERE id = 1";
         try (Statement stmt = getConnection().createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
+             ResultSet rs = stmt.executeQuery(query)
+        ) {
             if (rs.next()) {
-                settings.put("waiting_time_sec",  rs.getInt("waiting_time_sec"));
+                settings.put("waiting_time_sec", rs.getInt("waiting_time_sec"));
                 settings.put("game_duration_sec", rs.getInt("game_duration_sec"));
-                settings.put("max_players",        rs.getInt("max_players"));
-                settings.put("rounds_to_win",      rs.getInt("rounds_to_win"));
+                settings.put("max_players", rs.getInt("max_players"));
+                settings.put("rounds_to_win", rs.getInt("rounds_to_win"));
             }
         } catch (SQLException e) {
             e.printStackTrace();
