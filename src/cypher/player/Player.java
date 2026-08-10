@@ -6,8 +6,12 @@ import cypher.player.views.PlayerLoginView;
 import cypher.server.app.ServerApp;
 import cypher.server.app.ServerAppHelper;
 import cypher.server.config.GameConfig;
+import cypher.server.controller.exceptions.AlreadyLoggedInException;
+import cypher.server.controller.exceptions.InvalidCredentialsException;
+import cypher.server.controller.exceptions.PlayerBannedException;
 import cypher.server.tables.game.Game;
 import cypher.server.tables.leaderboard.Leaderboards;
+import org.omg.CORBA.COMM_FAILURE;
 import org.omg.CORBA.ORB;
 import org.omg.CosNaming.NamingContextExt;
 import org.omg.CosNaming.NamingContextExtHelper;
@@ -17,6 +21,10 @@ import org.omg.PortableServer.POAHelper;
 import javax.swing.*;
 import java.awt.*;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Properties;
@@ -77,9 +85,9 @@ public class Player {
             }
         }
 
-        java.nio.file.Path path = java.nio.file.Paths.get("src/config.properties");
-        if (java.nio.file.Files.exists(path)) {
-            try (InputStream in = java.nio.file.Files.newInputStream(path)) {
+        Path path = Paths.get("src/config.properties");
+        if (Files.exists(path)) {
+            try (InputStream in = Files.newInputStream(path)) {
                 p.load(in);
                 System.out.println("Loaded config from " + path.toAbsolutePath());
                 return p;
@@ -98,13 +106,13 @@ public class Player {
             playerId = server.login(username, password, callback);
             playerUsername = username;
             return 0;
-        } catch (cypher.server.controller.exceptions.InvalidCredentialsException e) {
+        } catch (InvalidCredentialsException e) {
             return 2;
-        } catch (cypher.server.controller.exceptions.AlreadyLoggedInException e) {
+        } catch (AlreadyLoggedInException e) {
             return 1;
-        } catch (cypher.server.controller.exceptions.PlayerBannedException e) {
+        } catch (PlayerBannedException e) {
             return 3;
-        } catch (org.omg.CORBA.COMM_FAILURE e) {
+        } catch (COMM_FAILURE e) {
             serverOfflineExit();
             return -1;
         } catch (Exception e) {
@@ -118,7 +126,7 @@ public class Player {
                 connect();
             }
             return server.register(username, password);
-        } catch (org.omg.CORBA.COMM_FAILURE e) {
+        } catch (COMM_FAILURE e) {
             System.out.println("[CLIENT] COMM_FAILURE during register");
             serverOfflineExit();
             return false;
@@ -149,7 +157,7 @@ public class Player {
                 connect();
             }
             return new ArrayList<>(Arrays.asList(server.getLeaderboard()));
-        } catch (org.omg.CORBA.COMM_FAILURE e) {
+        } catch (COMM_FAILURE e) {
             serverOfflineExit();
             return new ArrayList<>();
         } catch (Exception e) {
@@ -242,7 +250,7 @@ public class Player {
                 connect();
             }
             return server.getGameConfig();
-        } catch (org.omg.CORBA.COMM_FAILURE e) {
+        } catch (COMM_FAILURE e) {
             serverOfflineExit();
             return new GameConfig(30, 180, 2, 3);
         } catch (Exception e) {
@@ -251,12 +259,23 @@ public class Player {
     }
 
     public static int getWaitingTime() {
-        if (currentGame == null || currentGame.startTime == null) return -999;
+        if (currentGame == null || currentGame.startTime == null || currentGame.startTime.isEmpty()) return -999;
 
         GameConfig cfg = getGameConfig();
 
-        long diffMs = System.currentTimeMillis() - java.sql.Timestamp.valueOf(currentGame.startTime).getTime();
-        return cfg.waitingTimeSecs - (int) (diffMs / 1000);
+        try {
+            long startTimeMs;
+            try {
+                startTimeMs = Timestamp.valueOf(currentGame.startTime).getTime();
+            } catch (IllegalArgumentException e) {
+                return -999;
+            }
+            long diffMs = System.currentTimeMillis() - startTimeMs;
+            return cfg.waitingTimeSecs - (int) (diffMs / 1000);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return -999;
+        }
     }
 
     public static int getRoundDurationSeconds() {
@@ -282,7 +301,7 @@ public class Player {
             } else {
                 // local singleplayer: nothing to send, accept locally
             }
-        } catch (org.omg.CORBA.COMM_FAILURE e) {
+        } catch (COMM_FAILURE e) {
             serverOfflineExit();
         } catch (Exception e) {
             // show error to the user but don't crash the client
@@ -299,7 +318,12 @@ public class Player {
     public static void leaveGame() {
         try {
             if (currentGame != null && currentGame.gameId > 0) {
-                server.leaveGame(playerId, currentGame.gameId);
+                if ("WAITING".equalsIgnoreCase(currentGame.gameStatus)) {
+                    server.cancelQueue(playerId);
+                } else {
+                    server.leaveGame(playerId, currentGame.gameId);
+                }
+                clearLocalGameState();
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -311,6 +335,17 @@ public class Player {
             server.startGame(gameId);
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    public static void kickPlayer(int targetPlayerId) {
+        try {
+            if (server != null && currentGame != null && currentGame.gameId > 0) {
+                server.kickPlayer(playerId, targetPlayerId, currentGame.gameId);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
         }
     }
 
@@ -339,7 +374,7 @@ public class Player {
                 try {
                     server.logout(playerId);
                 } catch (Exception ignored) {
-                    // Server may have already disconnected this player on the admin side.
+
                 }
             }
         } finally {
@@ -360,7 +395,7 @@ public class Player {
                 if (!singlePlayerMode && server != null) {
                     server.getGameConfig();
                 }
-            } catch (org.omg.CORBA.COMM_FAILURE ex) {
+            } catch (COMM_FAILURE ex) {
                 ((Timer) e.getSource()).stop();
                 serverOfflineExit();
             } catch (Exception ex) {

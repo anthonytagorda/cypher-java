@@ -281,6 +281,12 @@ module cypher {
                 void leaveGame(in long playerId, in long gameId)
                     raises (controller::exceptions::NotInGameException);
 
+                /**
+                 * Removes a target player from the current game and notifies them.
+                 */
+                void kickPlayer(in long hostPlayerId, in long targetPlayerId, in long gameId)
+                    raises (controller::exceptions::NotInGameException);
+
                 // ── Leaderboard ───────────────────────────────────────────────
                 // Returns the top 5 players by total game wins.
                 tables::leaderboard::Leaderboard getLeaderboard();
