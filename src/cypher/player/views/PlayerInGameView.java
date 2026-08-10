@@ -645,7 +645,10 @@ public class PlayerInGameView extends JFrame {
 
             // Local singleplayer: offer the player a choice to play one more round or end the game
             Object[] options = {"Play another round", "End game"};
-            ImageIcon icon = new ImageIcon("src/cypher/assets/cypher_win.png");
+            ImageIcon trophyIcon = new ImageIcon("src/cypher/assets/cypher_win.png");
+            Image scaledTrophy = trophyIcon.getImage().getScaledInstance(90, 90, Image.SCALE_SMOOTH);
+            ImageIcon icon = new ImageIcon(scaledTrophy);
+
             String winnerText = (gameWinner == null || "TIE".equalsIgnoreCase(gameWinner))
                     ? "The round ended in a TIE!"
                     : gameWinner.toUpperCase() + " won this round!";
